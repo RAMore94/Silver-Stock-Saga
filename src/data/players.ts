@@ -1,0 +1,55 @@
+import type { Player } from '../types'
+
+export const STARTING_PLAYERS: Player[] = [
+  {
+    id: 'p1',
+    name: 'Jordan Vasquez',
+    tag: 'Cipher',
+    character: 'Fox',
+    stats: { execution: 72, neutral: 65, mental: 58, adaptability: 60 },
+    form: 75,
+    fatigue: 20,
+    salary: 1200,
+    weekActivity: 'train',
+    wins: 14,
+    losses: 8,
+    reputation: 38,
+  },
+  {
+    id: 'p2',
+    name: 'Mei Tanaka',
+    tag: 'Velvet',
+    character: 'Marth',
+    stats: { execution: 60, neutral: 78, mental: 72, adaptability: 65 },
+    form: 82,
+    fatigue: 10,
+    salary: 1000,
+    weekActivity: 'train',
+    wins: 20,
+    losses: 12,
+    reputation: 45,
+  },
+  {
+    id: 'p3',
+    name: 'Devon Hall',
+    tag: 'Smog',
+    character: 'Falco',
+    stats: { execution: 80, neutral: 62, mental: 50, adaptability: 54 },
+    form: 68,
+    fatigue: 35,
+    salary: 1400,
+    weekActivity: 'rest',
+    wins: 31,
+    losses: 22,
+    reputation: 52,
+  },
+]
+
+export const STARTING_TEAM = {
+  id: 'team1',
+  name: 'Silver Stock',
+  tag: 'SST',
+  balance: 25000,
+  reputation: 20,
+  week: 1,
+}

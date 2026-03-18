@@ -60,6 +60,42 @@ export interface TournamentResult {
   setsLost: number
 }
 
+export type SetNarrative = 'dominant' | 'comfortable' | 'close' | 'upset' | 'reverse_sweep'
+
+export interface SetResult {
+  win: boolean
+  playerScore: number
+  opponentScore: number
+  narrative: SetNarrative
+  opponentTag: string
+  opponentCharacter: Character
+  isBo5: boolean
+  round: string
+}
+
+export interface PlayerTournamentResult {
+  playerId: string
+  placement: number
+  prizeEarned: number
+  setsWon: number
+  setsLost: number
+  setHistory: SetResult[]
+  repGained: number
+}
+
+export interface TournamentReport {
+  tournamentId: string
+  tournamentName: string
+  tier: TournamentTier
+  playerResults: PlayerTournamentResult[]
+}
+
+export interface NPC {
+  tag: string
+  character: Character
+  rating: number
+}
+
 export interface Team {
   id: string
   name: string
@@ -74,6 +110,7 @@ export interface GameState {
   players: Player[]
   tournaments: Tournament[]
   pastResults: TournamentResult[]
+  pendingReport: TournamentReport | null
   screen: Screen
 }
 

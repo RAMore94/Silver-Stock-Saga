@@ -15,7 +15,7 @@ const TIER_COLORS = {
 }
 
 export function Schedule() {
-  const { tournaments, team, players } = useGameStore()
+  const { tournaments, team, players, registerForTournament, unregisterFromTournament } = useGameStore()
 
   const sorted = [...tournaments].sort((a, b) => a.week - b.week)
 
@@ -31,6 +31,7 @@ export function Schedule() {
           const isPast = t.week < team.week
           const isCurrent = t.week === team.week
           const weeksAway = t.week - team.week
+          const canRegister = !isPast && !isCurrent
 
           return (
             <div
@@ -70,30 +71,57 @@ export function Schedule() {
                   <span>${t.prizePool.toLocaleString()} prize pool</span>
                   <span>${t.entryFee} entry/player</span>
                 </div>
-              </div>
 
-              {/* Registered players */}
-              <div className="text-right text-sm shrink-0">
-                {t.registeredPlayers.length > 0 ? (
-                  <div>
-                    <div className="text-xs text-[#8a6a55] mb-1">Registered</div>
-                    {t.registeredPlayers.map((pid) => {
-                      const p = players.find((pl) => pl.id === pid)
+                {/* Per-player registration controls */}
+                {canRegister && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {players.map((p) => {
+                      const isRegistered = t.registeredPlayers.includes(p.id)
                       return (
-                        <div key={pid} className="text-xs text-[#3d2b1f] font-medium">
-                          {p?.tag ?? pid}
-                        </div>
+                        <button
+                          key={p.id}
+                          onClick={() =>
+                            isRegistered
+                              ? unregisterFromTournament(t.id, p.id)
+                              : registerForTournament(t.id, p.id)
+                          }
+                          className={`text-xs px-3 py-1 rounded-full border transition-colors cursor-pointer ${
+                            isRegistered
+                              ? 'bg-[#3d2b1f] text-[#faf4e8] border-[#3d2b1f]'
+                              : 'bg-transparent text-[#8a6a55] border-[#c8b89a] hover:border-[#3d2b1f] hover:text-[#3d2b1f]'
+                          }`}
+                        >
+                          {isRegistered ? `✓ ${p.tag}` : `+ ${p.tag} ($${t.entryFee})`}
+                        </button>
                       )
                     })}
                   </div>
-                ) : (
-                  !isPast && (
-                    <div className="text-xs text-[#8a6a55]">
-                      {weeksAway > 0 ? `in ${weeksAway} wk${weeksAway !== 1 ? 's' : ''}` : '—'}
-                    </div>
-                  )
+                )}
+
+                {/* Show registered players on current/past tournaments */}
+                {!canRegister && t.registeredPlayers.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {t.registeredPlayers.map((pid) => {
+                      const p = players.find((pl) => pl.id === pid)
+                      return (
+                        <span
+                          key={pid}
+                          className="text-xs px-3 py-1 rounded-full bg-[#3d2b1f] text-[#faf4e8]"
+                        >
+                          {p?.tag ?? pid}
+                        </span>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
+
+              {/* Weeks away indicator */}
+              {!isPast && !isCurrent && (
+                <div className="text-xs text-[#8a6a55] shrink-0 self-center">
+                  in {weeksAway} wk{weeksAway !== 1 ? 's' : ''}
+                </div>
+              )}
             </div>
           )
         })}

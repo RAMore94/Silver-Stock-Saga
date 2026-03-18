@@ -3,6 +3,7 @@ import { Dashboard } from './screens/Dashboard'
 import { Roster } from './screens/Roster'
 import { Schedule } from './screens/Schedule'
 import { Placeholder } from './screens/Placeholder'
+import { TournamentReportModal } from './components/TournamentReport'
 import { useGameStore } from './store/gameStore'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
           />
         )}
       </main>
+      <TournamentReportModal />
     </div>
   )
 }

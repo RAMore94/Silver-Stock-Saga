@@ -15,7 +15,7 @@ const TIER_COLORS = {
 }
 
 export function Dashboard() {
-  const { team, players, tournaments, advanceWeek, setScreen } = useGameStore()
+  const { team, players, tournaments, advanceWeek, setScreen, pendingReport, dismissReport } = useGameStore()
 
   const upcoming = tournaments
     .filter((t) => t.week >= team.week)
@@ -28,6 +28,26 @@ export function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-8">
+      {/* Pending tournament results banner */}
+      {pendingReport && (
+        <button
+          onClick={dismissReport}
+          className="w-full text-left bg-[#3d2b1f] text-[#faf4e8] rounded-2xl px-5 py-4 flex items-center gap-3 hover:bg-[#4a3628] transition-colors cursor-pointer"
+        >
+          <span className="text-lg">🏆</span>
+          <div className="flex-1">
+            <div className="text-sm font-semibold">{pendingReport.tournamentName} — Results In</div>
+            <div className="text-xs text-[#c8b89a] mt-0.5">
+              {pendingReport.playerResults.map((r) => {
+                const p = players.find((pl) => pl.id === r.playerId)
+                return `${p?.tag ?? r.playerId} placed ${r.placement === 1 ? '1st' : r.placement === 2 ? '2nd' : r.placement === 3 ? '3rd' : `${r.placement}th`}`
+              }).join(' · ')}
+            </div>
+          </div>
+          <span className="text-xs text-[#c8b89a]">View →</span>
+        </button>
+      )}
+
       {/* Page title */}
       <div className="flex items-end justify-between">
         <div>

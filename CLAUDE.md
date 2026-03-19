@@ -196,6 +196,101 @@ Screens are switched by setting `gameState.activeScreen` in the store. `App.tsx`
 
 ---
 
+## Type System Reference
+
+All types live in `src/types/index.ts`. Key interfaces:
+
+| Type | Description |
+|------|-------------|
+| `Player` | Full player record: stats, form, fatigue, salary, activity, wins/losses, reputation |
+| `PlayerStats` | The four core stats: `execution`, `neutral`, `mental`, `adaptability` (each 0–100) |
+| `Team` | Org record: `balance`, `reputation`, `week` |
+| `Tournament` | Event definition: tier, week, entrants, prizePool, entryFee, registeredPlayers, results |
+| `TournamentReport` | Post-event summary: per-player results + set history, used for the UI report modal |
+| `PlayerTournamentResult` | Per-player result with `setHistory: SetResult[]` and `repGained` |
+| `SetResult` | Single set outcome: scores, narrative, opponent tag/character, isBo5, round label |
+| `RankingEntry` | Ranked standing: decayed points total, rank, trend (`up`/`down`/`stable`), recentResults |
+| `RankingResult` | One result record inside a `RankingEntry`: placement, basePoints, earnedAtWeek |
+| `NPC` | Simulated opponent: tag, character, rating (raw EPR-scale number) |
+| `GameState` | Root state shape stored in the Zustand store |
+
+**Union types:**
+- `Screen` — `'dashboard' | 'roster' | 'schedule' | 'rankings' | 'training' | 'finances'`
+- `WeekActivity` — `'train' | 'rest' | 'local' | 'prep'`
+- `TournamentTier` — `'local' | 'regional' | 'major' | 'supermajor'`
+- `SetNarrative` — `'dominant' | 'comfortable' | 'close' | 'upset' | 'reverse_sweep'`
+- `CombatOption` — `'attack' | 'shield' | 'grab' | 'dodge'`
+- `Character` — 15 string literals (Fox … Donkey Kong)
+
+---
+
+## Weekly Activity Effects
+
+Applied in `advanceWeek()` inside `gameStore.ts` before tournaments run:
+
+| Activity | Fatigue | Form | Stats |
+|----------|---------|------|-------|
+| `train` | +15 | −5 | Weakest stat +2 |
+| `rest` | −25 | +8 | — |
+| `local` | +8 | +3 | — |
+| `prep` | +5 | +5 | — (but +5% EPR bonus during tourney) |
+
+After the switch, every player's `weekActivity` resets to `'train'` as the default for the next week.
+
+---
+
+## EPR Calculation (`engine/rating.ts`)
+
+`calcEPR(player)` returns a value in **0–200**. Steps in order:
+
+1. **Stat affinity adjustment** — add character-specific affinity bonuses from `characters.ts` to raw stats (clamped 0–100)
+2. **Weighted sum** — multiply adjusted stats by character-specific `STAT_WEIGHTS` (sum to 1.0); result is 0–100
+3. **Execution floor penalty** — Fox < 60, Falco < 65, Ice Climbers < 70 each take `1.5× deficit` subtracted from base
+4. **Tier bonus** — S: +8, A: +4, B: 0, C: −6
+5. **Form multiplier** — `0.80 + (form/100) × 0.40` → range 0.80–1.20
+6. **Fatigue penalty** — `1 − (fatigue/100) × 0.25` → up to −25%
+7. **Prep bonus** — ×1.05 if `weekActivity === 'prep'`
+8. **Scale to 0–200** — multiply by `200/136` (136 is the theoretical max before scaling)
+
+Win probability uses Elo-style formula: `1 / (1 + 10^((adjustedB − epA) / 80))` where `adjustedB = epB − matchupAdv`.
+
+---
+
+## Ranking Points Reference (`engine/ranking.ts`)
+
+Points by tier and placement:
+
+| Placement | local | regional | major | supermajor |
+|-----------|-------|----------|-------|------------|
+| 1st | 15 | 75 | 300 | 800 |
+| 2nd | 9 | 45 | 180 | 480 |
+| 3rd | 6 | 30 | 120 | 320 |
+| 4th | 3 | 18 | 75 | 200 |
+| Top 8 | 1 | 9 | 40 | 100 |
+| Top 16 | — | 4 | 20 | 50 |
+| Top 32 | — | — | 8 | 20 |
+
+**Decay:** `basePoints × 0.933^weeksAgo` — half-life ≈ 10 weeks.
+
+**Seeding advantage:** Top seeds face opponents scaled at ~65% of field average rating (rank 1), grading up to no protection for unranked players.
+
+---
+
+## NPC Opponent Pools (`engine/npcs.ts`)
+
+Each tier draws from a cumulative pool:
+
+| Tier | Pool composition | Rating range |
+|------|-----------------|--------------|
+| `local` | LOCAL only | ~30–62 |
+| `regional` | LOCAL + REGIONAL | ~30–98 |
+| `major` | REGIONAL + MAJOR | ~68–130 |
+| `supermajor` | MAJOR + SUPERMAJOR extras | ~102–160 |
+
+Opponent selection uses a Gaussian-weighted draw (`σ ≈ 30`) centred on the player's EPR — players face appropriate-strength opponents rather than a flat random pick.
+
+---
+
 ## What Not To Do
 
 - Do not add a backend, API calls, or environment variables — this is intentionally client-only

@@ -1,131 +1,283 @@
-import type { Character, SetResult, SetNarrative } from '../types'
-import { calcWinProbability } from './rating'
+import type { Character, PlayerStats, SetResult, SetNarrative, StagePosition } from '../types'
+import { getCharacterMeta } from '../data/characters'
+import { getMoveProfile } from '../data/movedata'
 import { getMatchupAdvantage } from './matchups'
+import {
+  CHARACTER_TENDENCIES,
+  selectOption,
+  selectMovementOption,
+  resolveMovement,
+  resolveOptions,
+} from './neutral'
+
+// ── Damage / kill helpers ─────────────────────────────────────────────────────
+
+/**
+ * How much % damage is dealt when a player wins a combat exchange.
+ * Grab wins lead to positioning damage more than raw %; OOS punishes are smaller.
+ */
+function calcDamageDealt(character: Character, option: 'attack' | 'shield' | 'grab' | 'dodge'): number {
+  const moves = getMoveProfile(character)
+  switch (option) {
+    case 'attack': return moves.avgDamagePerHit * (1 + moves.comboConvert * 0.5)
+    case 'grab':   return moves.avgDamagePerHit * 0.8 + 6   // grab → follow-up, good damage
+    case 'shield': return moves.avgDamagePerHit * 0.6        // OOS punish, smaller conversion
+    case 'dodge':  return moves.avgDamagePerHit * 0.4        // punish whiffed dodge, small hit
+  }
+}
+
+/**
+ * Whether a character is killed at the given percent + position.
+ *
+ * Kill threshold is based on SSBM weight: heavier characters survive longer.
+ * Position matters — being at the edge or offstage dramatically lowers the threshold.
+ * There is a probabilistic "kill window" below the hard threshold to model early kills.
+ *
+ * Weight reference: Jigglypuff=60, Fox=75, Sheik=78, Marth=87, Falcon=104, DK=117
+ */
+function isKilled(percent: number, weight: number, position: StagePosition): boolean {
+  // Base threshold: 85 is the average weight (centre of field)
+  // +0.4% survivability per weight unit above average
+  const base = 90 + (weight - 85) * 0.4
+  const posMod = position === 'edge' ? -20 : position === 'offstage' ? -45 : 0
+  const threshold = base + posMod
+
+  // Guaranteed kill well above threshold
+  if (percent >= threshold + 10) return true
+  // Impossible kill well below window
+  if (percent < threshold - 15) return false
+  // Probabilistic kill window: linearly increasing from 0% to 100% over 25%
+  return Math.random() < (percent - (threshold - 15)) / 25
+}
+
+/**
+ * Moves a stage position one step in the given direction.
+ *   +1 → toward centre   (offstage → edge → center)
+ *   -1 → toward edge     (center → edge → offstage)
+ */
+function applyDelta(pos: StagePosition, delta: -1 | 0 | 1): StagePosition {
+  if (delta === 0) return pos
+  if (delta === 1) return pos === 'offstage' ? 'edge' : 'center'
+  return pos === 'center' ? 'edge' : 'offstage'
+}
+
+// ── ICs handoff ───────────────────────────────────────────────────────────────
 
 /**
  * Ice Climbers handoff mechanic.
- * Handoffs are the modern replacement for wobbling — they can chain into
- * near-0-deaths at the ledge but give the opponent a directional mixup
- * during the throw. High execution = reliable chain. Opponent adaptability
- * determines escape probability on the directional guess.
- *
- * Returns a game-win probability modifier (+/- applied to base winProb).
+ * Returns a bonus damage multiplier applied to ICs grab exchanges.
+ * High execution = reliable chain; high opponent adaptability = better escape guess.
  */
-function calcICsHandoffModifier(
-  icExecution: number,
-  opponentAdaptability: number
-): number {
-  // Probability a handoff attempt is executed cleanly
-  const handoffReliability = Math.max(0, (icExecution - 50) / 50) // 0 at exec=50, 1.0 at exec=100
-
-  // Opponent escape probability on the directional mixup (50/50 base, reduced by ICs execution)
-  // Higher opponent adaptability = better guess on the directional
-  const escapeChance = 0.5 - handoffReliability * 0.3 + (opponentAdaptability / 100) * 0.15
+function calcICsHandoffBonus(icExecution: number, opponentAdaptability: number): number {
+  const reliability = Math.max(0, (icExecution - 50) / 50)
+  const escapeChance = 0.5 - reliability * 0.3 + (opponentAdaptability / 100) * 0.15
   const convertChance = Math.max(0.1, Math.min(0.9, 1 - escapeChance))
+  // Successful handoff ≈ near-0-death; multiply grab damage by up to 2.5×
+  return reliability * convertChance * 1.5
+}
 
-  // Expected value: successful handoff = big swing (+0.25 game-win prob boost)
-  // Failed handoff (escaped) = small penalty (-0.08, now ICs are offstage chasing)
-  const ev = handoffReliability * (convertChance * 0.25 - (1 - convertChance) * 0.08)
+// ── NPC stat inference ────────────────────────────────────────────────────────
 
-  return ev  // typically +0.0 to +0.18 bonus to win probability
+/**
+ * Infers a rough stat profile for an NPC from their EPR rating.
+ * Used so NPCs can participate in the full movement + option selection system.
+ */
+function inferNPCStats(epr: number, adaptability: number): PlayerStats {
+  const norm = Math.min(1, Math.max(0, (epr - 30) / 130))
+  return {
+    execution:    Math.round(norm * 70 + 25),
+    neutral:      Math.round(norm * 70 + 25),
+    mental:       Math.round(norm * 60 + 30),
+    adaptability,
+  }
+}
+
+// ── Game simulation ───────────────────────────────────────────────────────────
+
+interface GameParams {
+  playerCharacter:      Character
+  playerStats:          PlayerStats
+  opponentCharacter:    Character
+  opponentEPR:          number
+  opponentAdaptability: number
+  isICsPlayer:          boolean
 }
 
 /**
- * Simulate a single game (not a full set) between two players.
- * Returns true if player A wins.
+ * Simulates a single game (one stock each) using the movement + combat framework.
  *
- * mentalA affects variance: lower mental = more swing around the base probability.
+ * Each round:
+ *   1. Both players pick a movement option (approach / retreat / platform / camp)
+ *   2. Movement is resolved — positions update, engagement check happens
+ *   3. If engaged: both pick a combat option (attack / shield / grab / dodge)
+ *   4. Exchange is resolved — winner deals damage based on their character's output
+ *   5. Kill check: does the hit send the opponent off stage given their % and weight?
+ *
+ * Returns true if the player wins the game.
  */
-function simulateGame(
-  winProb: number,
-  mentalA: number,
-  isICsPlayer: boolean,
-  icExecution: number,
-  opponentAdaptability: number
-): boolean {
-  let effectiveProb = winProb
+function simulateGame(params: GameParams): boolean {
+  const { playerCharacter, playerStats, opponentCharacter, opponentEPR, opponentAdaptability, isICsPlayer } = params
 
-  // Mental variance: low mental adds noise, high mental plays to their true level
-  const mentalVariance = (1 - mentalA / 100) * 0.15
-  const noise = (Math.random() - 0.5) * 2 * mentalVariance
-  effectiveProb = Math.max(0.02, Math.min(0.98, effectiveProb + noise))
+  const playerWeight   = getCharacterMeta(playerCharacter).weight
+  const opponentWeight = getCharacterMeta(opponentCharacter).weight
+  const opponentStats  = inferNPCStats(opponentEPR, opponentAdaptability)
+  const matchupAdv     = getMatchupAdvantage(playerCharacter, opponentCharacter)
 
-  // ICs handoff modifier
-  if (isICsPlayer) {
-    const handoffMod = calcICsHandoffModifier(icExecution, opponentAdaptability)
-    effectiveProb = Math.min(0.98, effectiveProb + handoffMod)
+  // Matchup advantage shifts the opponent's effective weight — a favourable matchup
+  // means the player "converts" better, modelled as ±5 on opponent's kill threshold
+  const opponentEffectiveWeight = opponentWeight - matchupAdv * 0.4
+
+  let playerPercent   = 0
+  let opponentPercent = 0
+  let playerPos:   StagePosition = 'center'
+  let opponentPos: StagePosition = 'center'
+
+  // Option tendency trackers — updated as patterns are observed during the game
+  const playerTend   = { ...CHARACTER_TENDENCIES[playerCharacter] }
+  const opponentTend = { ...CHARACTER_TENDENCIES[opponentCharacter] }
+
+  const MAX_ROUNDS = 40  // safety cap — games resolve well before this in practice
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const playerIsWinning   = playerPercent <= opponentPercent  // lower % = ahead
+    const opponentIsWinning = !playerIsWinning
+
+    // ── Movement phase ──────────────────────────────────────────────────────
+    const playerMove = selectMovementOption(
+      playerCharacter, playerPos, playerStats.neutral, playerIsWinning, playerStats.adaptability,
+    )
+    const opponentMove = selectMovementOption(
+      opponentCharacter, opponentPos, opponentStats.neutral, opponentIsWinning, opponentAdaptability,
+    )
+
+    const movement = resolveMovement(playerMove, opponentMove, playerStats.neutral, opponentStats.neutral)
+
+    playerPos   = applyDelta(playerPos,   movement.playerPositionDelta)
+    opponentPos = applyDelta(opponentPos, movement.opponentPositionDelta)
+
+    if (!movement.engaged) continue
+
+    // ── Combat exchange ─────────────────────────────────────────────────────
+    const playerPressure   = Math.min(1, playerPercent / 120 + movement.pressureShift)
+    const opponentPressure = Math.min(1, opponentPercent / 120)
+
+    const playerCombat   = selectOption(playerStats,   playerCharacter,   opponentTend, playerPressure)
+    const opponentCombat = selectOption(opponentStats, opponentCharacter, playerTend,   opponentPressure)
+
+    const outcome = resolveOptions(playerCombat, opponentCombat)
+
+    if (outcome === 'player_wins') {
+      let dmg = calcDamageDealt(playerCharacter, playerCombat)
+
+      // ICs grab → apply handoff bonus
+      if (isICsPlayer && playerCombat === 'grab') {
+        dmg *= 1 + calcICsHandoffBonus(playerStats.execution, opponentAdaptability)
+      }
+
+      opponentPercent += dmg
+      // Reduce opponent's tendency to repeat the option that just lost
+      opponentTend[opponentCombat] = Math.max(
+        0.05, opponentTend[opponentCombat] - (playerStats.adaptability / 100) * 0.05
+      )
+
+      // At high % a won exchange may launch opponent toward the blast zone
+      if (opponentPercent > 55 && opponentPos === 'center' && Math.random() < 0.28) {
+        opponentPos = 'edge'
+      }
+
+      if (isKilled(opponentPercent, opponentEffectiveWeight, opponentPos)) return true
+
+    } else if (outcome === 'opponent_wins') {
+      const dmg = calcDamageDealt(opponentCharacter, opponentCombat)
+      playerPercent += dmg
+      playerTend[playerCombat] = Math.max(
+        0.05, playerTend[playerCombat] - (opponentAdaptability / 100) * 0.05
+      )
+
+      if (playerPercent > 55 && playerPos === 'center' && Math.random() < 0.28) {
+        playerPos = 'edge'
+      }
+
+      if (isKilled(playerPercent, playerWeight, playerPos)) return false
+    }
+    // neutral outcome: no damage, no position shift from the exchange itself
   }
 
-  return Math.random() < effectiveProb
+  // Timeout: lower percent is ahead (more stocks remaining in full-stock logic)
+  return playerPercent <= opponentPercent
 }
 
-/**
- * Derive a narrative tag from the set result and rating context.
- */
+// ── Narrative derivation ──────────────────────────────────────────────────────
+
 function deriveNarrative(
   playerScore: number,
   opponentScore: number,
-  epDiff: number,   // player EPR - opponent EPR (positive = player stronger)
-  wasDown: boolean  // player fell behind 0-2 in Bo5
+  epDiff: number,
+  wasDown02: boolean,
 ): SetNarrative {
   const won = playerScore > opponentScore
   const gamesPlayed = playerScore + opponentScore
   const maxGames = Math.max(playerScore, opponentScore) === 2 ? 3 : 5
 
-  if (!won && epDiff > 12) return 'upset'          // player was the favorite but lost
-  if (won && wasDown && maxGames === 5) return 'reverse_sweep'  // came back from 0-2
-  if (gamesPlayed === maxGames) return 'close'      // went to last game
-  if (won && epDiff > 15 && playerScore > 0 && opponentScore === 0) return 'dominant'
+  if (!won && epDiff > 12) return 'upset'
+  if (won && wasDown02 && maxGames === 5) return 'reverse_sweep'
+  if (gamesPlayed === maxGames) return 'close'
+  if (won && epDiff > 15 && opponentScore === 0) return 'dominant'
   if (won) return 'comfortable'
   return 'close'
 }
 
+// ── Public interface ──────────────────────────────────────────────────────────
+
 export interface SimSetParams {
-  playerEPR: number
-  playerMental: number
-  playerCharacter: Character
-  playerExecution: number
-  opponentEPR: number
+  playerEPR:            number
+  playerStats:          PlayerStats
+  playerCharacter:      Character
+  opponentEPR:          number
   opponentAdaptability: number
-  opponentCharacter: Character
-  opponentTag: string
-  isBo5: boolean
-  round: string
+  opponentCharacter:    Character
+  opponentTag:          string
+  isBo5:                boolean
+  round:                string
 }
 
 /**
  * Simulates a full set (Bo3 or Bo5) and returns the result.
+ *
+ * Each game uses the movement + combat framework. Adaptability between games
+ * is implicitly handled — the per-game option tendency tracking means a player
+ * who loses repeatedly to the same option will start countering it.
  */
 export function simulateSet(params: SimSetParams): SetResult {
   const {
-    playerEPR, playerMental, playerCharacter, playerExecution,
-    opponentEPR, opponentAdaptability, opponentCharacter, opponentTag,
-    isBo5, round,
+    playerEPR, playerStats, playerCharacter,
+    opponentEPR, opponentAdaptability, opponentCharacter,
+    opponentTag, isBo5, round,
   } = params
 
-  const matchupAdv = getMatchupAdvantage(playerCharacter, opponentCharacter)
-  const baseWinProb = calcWinProbability(playerEPR, opponentEPR, matchupAdv)
-  const isICs = playerCharacter === 'Ice Climbers'
   const targetScore = isBo5 ? 3 : 2
   const epDiff = playerEPR - opponentEPR
+  const isICs = playerCharacter === 'Ice Climbers'
 
-  let playerScore = 0
+  const gameParams: GameParams = {
+    playerCharacter,
+    playerStats,
+    opponentCharacter,
+    opponentEPR,
+    opponentAdaptability,
+    isICsPlayer: isICs,
+  }
+
+  let playerScore   = 0
   let opponentScore = 0
-  let wasDown02 = false
+  let wasDown02     = false
 
   while (playerScore < targetScore && opponentScore < targetScore) {
-    // Track if player fell behind 0-2 in Bo5 for reverse sweep detection
     if (isBo5 && playerScore === 0 && opponentScore === 2) wasDown02 = true
 
-    // Adaptability mid-set adjustment: as sets go longer, adaptability shifts probability
-    // Opponent also adapts — modeled as slight regression toward 50% over games
-    const gamesPlayed = playerScore + opponentScore
-    const adaptShift = gamesPlayed > 1 ? (opponentAdaptability - 50) / 100 * 0.03 : 0
-    const adjustedProb = Math.max(0.02, Math.min(0.98, baseWinProb - adaptShift))
-
-    const won = simulateGame(adjustedProb, playerMental, isICs, playerExecution, opponentAdaptability)
+    const won = simulateGame(gameParams)
     if (won) playerScore++
-    else opponentScore++
+    else     opponentScore++
   }
 
   const win = playerScore === targetScore

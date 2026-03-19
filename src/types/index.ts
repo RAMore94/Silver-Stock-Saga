@@ -141,6 +141,14 @@ export interface RankingEntry {
   recentResults: RankingResult[]
 }
 
+// ── Movement / stage positioning ─────────────────────────────────────────────
+
+// Simplified stage zones — where a player is relative to the blast zone
+export type StagePosition = 'center' | 'edge' | 'offstage'
+
+// What a player does during a movement tick before engagement
+export type MovementOption = 'approach' | 'retreat' | 'platform' | 'camp'
+
 // ── Attack / Shield / Grab triangle framework ─────────────────────────────────
 
 // The three fundamental combat options in SSBM neutral + dodge

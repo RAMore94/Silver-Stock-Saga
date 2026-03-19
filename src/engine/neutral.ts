@@ -25,7 +25,7 @@
  * finer tuning of values and the exchange loop belong in future iterations.
  */
 
-import type { Character, CombatOption, OptionTendencies, ExchangeResult, PlayerStats } from '../types'
+import type { Character, CombatOption, OptionTendencies, ExchangeResult, PlayerStats, StagePosition, MovementOption } from '../types'
 import { characterAttackValue } from '../data/movedata'
 
 // ── Resolution table ──────────────────────────────────────────────────────────
@@ -294,4 +294,159 @@ export function simulateNeutralPhase(params: NeutralPhaseParams): NeutralPhaseRe
  */
 export function neutralAdvantageToWinMod(advantage: number): number {
   return Math.max(-0.20, Math.min(0.20, advantage * 0.07))
+}
+
+// ── Movement / spacing layer ───────────────────────────────────────────────────
+//
+// Before players engage in the combat triangle, they move around the stage.
+// This layer models dash dancing, stage positioning, zoning, and the decision
+// of when to commit to an approach vs maintain space.
+//
+// Stage zones (simplified): center → edge → offstage
+//   center:   best position — full options, neutral damage thresholds
+//   edge:     dangerous — limited movement, characters die ~20% earlier
+//   offstage: very dangerous — one hit at any % can kill
+//
+// Each tick a player picks a movement option. When both players' choices result
+// in engagement, combat triangle options are then selected and resolved.
+
+// Per-character baseline movement tendencies.
+// Reflects how each character actually moves in competitive play:
+//   Fox/Falcon: aggressive, approach-first
+//   Falco: mix of approach and camp (laser + approach)
+//   Jigglypuff: platform-centric, avoids direct approach
+//   Samus: pure zoner — camp-heavy
+//   Sheik/Marth: balanced with slight approach lean
+export const CHARACTER_MOVEMENT: Record<Character, Record<MovementOption, number>> = {
+  Fox:              { approach: 0.55, retreat: 0.15, platform: 0.20, camp: 0.10 },
+  Falco:            { approach: 0.40, retreat: 0.15, platform: 0.20, camp: 0.25 },
+  Marth:            { approach: 0.40, retreat: 0.25, platform: 0.25, camp: 0.10 },
+  Sheik:            { approach: 0.45, retreat: 0.20, platform: 0.20, camp: 0.15 },
+  Jigglypuff:       { approach: 0.30, retreat: 0.20, platform: 0.40, camp: 0.10 },
+  Peach:            { approach: 0.35, retreat: 0.20, platform: 0.30, camp: 0.15 },
+  'Captain Falcon': { approach: 0.60, retreat: 0.15, platform: 0.15, camp: 0.10 },
+  'Ice Climbers':   { approach: 0.50, retreat: 0.15, platform: 0.15, camp: 0.20 },
+  Pikachu:          { approach: 0.42, retreat: 0.20, platform: 0.22, camp: 0.16 },
+  Samus:            { approach: 0.20, retreat: 0.20, platform: 0.20, camp: 0.40 },
+  Luigi:            { approach: 0.45, retreat: 0.20, platform: 0.20, camp: 0.15 },
+  'Young Link':     { approach: 0.32, retreat: 0.20, platform: 0.22, camp: 0.26 },
+  'Dr. Mario':      { approach: 0.42, retreat: 0.22, platform: 0.22, camp: 0.14 },
+  Ganondorf:        { approach: 0.50, retreat: 0.20, platform: 0.15, camp: 0.15 },
+  'Donkey Kong':    { approach: 0.45, retreat: 0.20, platform: 0.15, camp: 0.20 },
+}
+
+export interface MovementResolution {
+  engaged: boolean            // did this tick result in a combat exchange?
+  playerPositionDelta: -1 | 0 | 1   // -1 toward edge, 0 same, +1 toward center
+  opponentPositionDelta: -1 | 0 | 1
+  pressureShift: number       // extra pressure on player from the movement outcome (0–0.3)
+}
+
+/**
+ * Selects a movement option for a player for one tick.
+ *
+ * Factors:
+ *   - Character's baseline movement tendency
+ *   - Current stage position (at edge → prefer retreat/platform to re-centre)
+ *   - Game state: winning players hold space; losing players take risks
+ *   - Neutral stat: better neutral = smarter about when to approach vs wait
+ */
+export function selectMovementOption(
+  character: Character,
+  position: StagePosition,
+  neutralStat: number,
+  isWinning: boolean,   // lower % = winning in SSBM
+  adaptability: number,
+): MovementOption {
+  const base = { ...CHARACTER_MOVEMENT[character] }
+
+  // At edge: prioritise getting back to centre
+  if (position === 'edge') {
+    base.retreat = Math.max(0.05, base.retreat - 0.10)
+    base.platform += 0.15
+    base.approach = Math.max(0.05, base.approach - 0.05)
+  }
+
+  // Winning → hold stage, play more defensive
+  if (isWinning) {
+    const hold = (neutralStat / 100) * 0.12
+    base.retreat += hold
+    base.camp    += hold * 0.5
+    base.approach = Math.max(0.05, base.approach - hold)
+  }
+
+  // Losing → need to make a play, more aggressive
+  if (!isWinning) {
+    const press = (adaptability / 100) * 0.12
+    base.approach += press
+    base.retreat  = Math.max(0.05, base.retreat - press)
+  }
+
+  const total = base.approach + base.retreat + base.platform + base.camp
+  const norm = {
+    approach: base.approach / total,
+    retreat:  base.retreat  / total,
+    platform: base.platform / total,
+    camp:     base.camp     / total,
+  }
+
+  let rand = Math.random()
+  if ((rand -= norm.approach) <= 0) return 'approach'
+  if ((rand -= norm.retreat)  <= 0) return 'retreat'
+  if ((rand -= norm.platform) <= 0) return 'platform'
+  return 'camp'
+}
+
+/**
+ * Resolves the movement phase between two players and determines:
+ *   - Whether they end up close enough to exchange combat options
+ *   - How stage position shifts
+ *   - Any pressure advantage going into the combat exchange
+ *
+ * Higher neutral stats improve engagement on favourable terms (e.g. when
+ * approaching, a better neutral player times the dash in more safely).
+ */
+export function resolveMovement(
+  playerOpt: MovementOption,
+  opponentOpt: MovementOption,
+  playerNeutral: number,
+  opponentNeutral: number,
+): MovementResolution {
+  // Base engagement probability by option matchup
+  const ENGAGE_MATRIX: Record<MovementOption, Record<MovementOption, number>> = {
+    approach: { approach: 0.90, retreat: 0.45, platform: 0.60, camp: 0.70 },
+    retreat:  { approach: 0.45, retreat: 0.05, platform: 0.05, camp: 0.05 },
+    platform: { approach: 0.60, retreat: 0.05, platform: 0.20, camp: 0.15 },
+    camp:     { approach: 0.70, retreat: 0.05, platform: 0.15, camp: 0.10 },
+  }
+
+  const baseChance = ENGAGE_MATRIX[playerOpt][opponentOpt]
+  // Better neutral = engage on your terms; difference shifts probability slightly
+  const neutralMod = (playerNeutral - opponentNeutral) / 200 * 0.15
+  const engaged = Math.random() < Math.max(0, Math.min(1, baseChance + neutralMod))
+
+  let playerDelta:   -1 | 0 | 1 = 0
+  let opponentDelta: -1 | 0 | 1 = 0
+  let pressureShift = 0
+
+  // Retreat pushes toward edge
+  if (playerOpt   === 'retreat') playerDelta   = -1
+  if (opponentOpt === 'retreat') opponentDelta = -1
+
+  // Successful approach vs retreating opponent → approacher takes centre
+  if (playerOpt === 'approach' && opponentOpt === 'retreat') {
+    playerDelta   =  1
+    pressureShift =  0.10  // opponent is on the back foot
+  }
+  if (playerOpt === 'retreat' && opponentOpt === 'approach') {
+    opponentDelta =  1
+    pressureShift =  0.20  // player being pushed back
+  }
+
+  // Camp absorbs some approach pressure but yields centre slowly
+  if (playerOpt === 'camp' && opponentOpt === 'approach') {
+    pressureShift = 0.08
+  }
+
+  return { engaged, playerPositionDelta: playerDelta, opponentPositionDelta: opponentDelta, pressureShift }
 }

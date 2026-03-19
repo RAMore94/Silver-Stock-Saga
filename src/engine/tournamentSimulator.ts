@@ -139,9 +139,8 @@ function simulatePlayerRun(
 
     const result = simulateSet({
       playerEPR: epr,
-      playerMental: player.stats.mental,
+      playerStats: player.stats,
       playerCharacter: player.character,
-      playerExecution: player.stats.execution,
       opponentEPR: opponent.rating,
       opponentAdaptability: 50,  // NPC adaptability — baseline
       opponentCharacter: opponent.character,

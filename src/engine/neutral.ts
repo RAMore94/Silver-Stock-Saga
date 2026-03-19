@@ -26,6 +26,7 @@
  */
 
 import type { Character, CombatOption, OptionTendencies, ExchangeResult, PlayerStats } from '../types'
+import { characterAttackValue } from '../data/movedata'
 
 // ── Resolution table ──────────────────────────────────────────────────────────
 
@@ -64,32 +65,49 @@ export function resolveOptions(optionA: CombatOption, optionB: CombatOption): Ex
 //   - Marth: balanced with tilt toward attack (tipper spacing)
 
 export const CHARACTER_TENDENCIES: Record<Character, OptionTendencies> = {
+  // S tier — Fox/Falco attack-first; Sheik/ICs grab-hunting; Puff float-dominant
   Fox:              { attack: 0.50, shield: 0.15, grab: 0.20, dodge: 0.15 },
   Falco:            { attack: 0.48, shield: 0.18, grab: 0.20, dodge: 0.14 },
   Marth:            { attack: 0.40, shield: 0.22, grab: 0.20, dodge: 0.18 },
   Sheik:            { attack: 0.30, shield: 0.22, grab: 0.35, dodge: 0.13 },
   Jigglypuff:       { attack: 0.35, shield: 0.15, grab: 0.10, dodge: 0.40 },
+  // A tier
   Peach:            { attack: 0.32, shield: 0.20, grab: 0.18, dodge: 0.30 },
   'Captain Falcon': { attack: 0.55, shield: 0.15, grab: 0.20, dodge: 0.10 },
   'Ice Climbers':   { attack: 0.20, shield: 0.18, grab: 0.50, dodge: 0.12 },
+  // B tier
   Pikachu:          { attack: 0.42, shield: 0.20, grab: 0.22, dodge: 0.16 },
   Samus:            { attack: 0.35, shield: 0.28, grab: 0.18, dodge: 0.19 },
   Luigi:            { attack: 0.38, shield: 0.20, grab: 0.28, dodge: 0.14 },
   'Young Link':     { attack: 0.42, shield: 0.22, grab: 0.18, dodge: 0.18 },
+  // C tier
   'Dr. Mario':      { attack: 0.40, shield: 0.22, grab: 0.22, dodge: 0.16 },
   Ganondorf:        { attack: 0.45, shield: 0.25, grab: 0.20, dodge: 0.10 },
+  // DK: patient punish-focused; cargo throw means he heavily values grabs;
+  // high shield reflects that his large hurtbox demands defensive respect
+  'Donkey Kong':    { attack: 0.38, shield: 0.27, grab: 0.25, dodge: 0.10 },
 }
 
 // ── Exchange value ────────────────────────────────────────────────────────────
-// How much "damage advantage" a player wins when their option beats the opponent's.
-// Grab conversions are most valuable (chain/handoff potential), then attack (combo),
-// then shield (OOS punish). Dodge wins lead to punishes but usually smaller reward.
+// Base value when each option wins an exchange.
+// Attack value is CHARACTER-SPECIFIC — use getAttackExchangeValue() instead of
+// indexing this directly for attacks. The base 1.0 here is overridden per character
+// by characterAttackValue() from movedata.ts.
 
 export const EXCHANGE_VALUE: Record<CombatOption, number> = {
   grab:   1.4,  // ICs/Sheik grab = huge; even normal grabs give back position
-  attack: 1.0,  // combo starter or percent trade
+  attack: 1.0,  // base — overridden per character via getAttackExchangeValue()
   shield: 0.8,  // OOS punish — strong but limited options for some chars
   dodge:  0.6,  // punish off dodge — often smaller conversion
+}
+
+/**
+ * Returns the character-specific attack exchange value, driven by the move data.
+ * Ganondorf attacking wins are worth ~1.8× (massive damage, early kills);
+ * Sheik attacking wins are ~0.9× (lower individual damage, combo-reliant).
+ */
+export function getAttackExchangeValue(character: Character): number {
+  return characterAttackValue(character)
 }
 
 // ── Option selection ──────────────────────────────────────────────────────────
@@ -230,14 +248,20 @@ export function simulateNeutralPhase(params: NeutralPhaseParams): NeutralPhaseRe
     const outcome = resolveOptions(playerOption, opponentOption)
 
     if (outcome === 'player_wins') {
-      playerScore += EXCHANGE_VALUE[playerOption]
+      const value = playerOption === 'attack'
+        ? getAttackExchangeValue(playerCharacter)
+        : EXCHANGE_VALUE[playerOption]
+      playerScore += value
       // Update opponent tendency tracking — adaptability makes this faster
       opponentTend[opponentOption] = Math.max(
         0.05,
         opponentTend[opponentOption] - playerStats.adaptability / 100 * 0.04
       )
     } else if (outcome === 'opponent_wins') {
-      opponentScore += EXCHANGE_VALUE[opponentOption]
+      const value = opponentOption === 'attack'
+        ? getAttackExchangeValue(opponentCharacter)
+        : EXCHANGE_VALUE[opponentOption]
+      opponentScore += value
       playerTend[playerOption] = Math.max(
         0.05,
         playerTend[playerOption] - opponentStats.adaptability / 100 * 0.04

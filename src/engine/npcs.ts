@@ -20,6 +20,8 @@ const LOCAL_NPCS: NPC[] = [
   { tag: 'Vex',    character: 'Pikachu',         rating: 40 },
   { tag: 'Jolt',   character: 'Captain Falcon',  rating: 55 },
   { tag: 'Nape',   character: 'Sheik',           rating: 60 },
+  { tag: 'Kong',   character: 'Donkey Kong',     rating: 35 },
+  { tag: 'Barrel', character: 'Donkey Kong',     rating: 50 },
 ]
 
 const REGIONAL_NPCS: NPC[] = [
@@ -38,6 +40,7 @@ const REGIONAL_NPCS: NPC[] = [
   { tag: 'Lumin',  character: 'Fox',             rating: 95 },
   { tag: 'Axiom',  character: 'Jigglypuff',      rating: 86 },
   { tag: 'Praxis', character: 'Falco',           rating: 98 },
+  { tag: 'Rumble', character: 'Donkey Kong',     rating: 72 },
 ]
 
 const MAJOR_NPCS: NPC[] = [

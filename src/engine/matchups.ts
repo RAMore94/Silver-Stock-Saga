@@ -76,6 +76,19 @@ const MATCHUP_TABLE: Partial<Record<Character, Partial<Record<Character, number>
     Jigglypuff: 8,
     Peach: 0,
     'Captain Falcon': 5,
+    'Donkey Kong': 10,  // ICs grab DK's giant hurtbox easily; handoff near-guaranteed
+  },
+  // Donkey Kong — large hurtbox is his core weakness vs. the entire top tier.
+  // Giant Punch + cargo throw give him power, but every S-tier combo routes him hard.
+  'Donkey Kong': {
+    Fox: -15,          // Fox combos DK's hurtbox extensively; near-unwinnable
+    Falco: -12,        // Pillar combos destroy DK; laser pressure limits approach
+    Marth: -10,        // Tipper spacing keeps DK out; tipped fsmash kills early
+    Sheik: -15,        // Sheik chaingrabs DK and juggles freely; very bad MU
+    Jigglypuff: -5,    // Puff bair pokes DK's large hurtbox; but DK can punish hard
+    Peach:  -5,        // Peach can combo DK; DK's power threatens Peach though
+    'Captain Falcon': 5,  // Both big power chars; DK's reach + Giant Punch threat evens it
+    'Ice Climbers': -10,  // ICs grab DK so easily; desync covers all approach options
   },
 }
 

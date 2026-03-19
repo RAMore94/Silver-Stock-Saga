@@ -98,6 +98,16 @@ export const CHARACTERS: CharacterMeta[] = [
     affinities: { execution: -5, neutral: 3, mental: 8, adaptability: 2 },
     color: '#805080',
   },
+  {
+    // DK is a power character: giant hurtbox makes him easy to combo, but
+    // Giant Punch and cargo throw give him unique lethality when he lands hits.
+    // Mental bonus reflects that DK mains are usually well-studied players who
+    // choose him despite the matchup spread — patience and punish discipline.
+    name: 'Donkey Kong',
+    tier: 'C',
+    affinities: { execution: -2, neutral: 2, mental: 5, adaptability: 0 },
+    color: '#c49a38',
+  },
 ]
 
 export function getCharacterMeta(name: Character): CharacterMeta {

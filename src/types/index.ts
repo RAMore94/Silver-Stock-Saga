@@ -13,6 +13,7 @@ export type Character =
   | 'Young Link'
   | 'Dr. Mario'
   | 'Ganondorf'
+  | 'Donkey Kong'
 
 export type WeekActivity = 'train' | 'rest' | 'local' | 'prep'
 

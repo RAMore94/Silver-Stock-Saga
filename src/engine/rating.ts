@@ -14,6 +14,9 @@ const STAT_WEIGHTS: Record<string, { execution: number; neutral: number; mental:
   // Mental/adaptability characters — winning through reads, patience, punish
   Jigglypuff:     { execution: 0.12, neutral: 0.25, mental: 0.38, adaptability: 0.25 },
   Peach:          { execution: 0.18, neutral: 0.27, mental: 0.30, adaptability: 0.25 },
+  // DK — punish-focused; mental matters most (patience to wait for Giant Punch/grab windows);
+  // neutral is relevant for bair spacing; execution is low-requirement
+  'Donkey Kong':  { execution: 0.15, neutral: 0.28, mental: 0.32, adaptability: 0.25 },
   // Default — balanced weighting for A/B/C tier chars
   default:        { execution: 0.25, neutral: 0.25, mental: 0.25, adaptability: 0.25 },
 }

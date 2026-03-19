@@ -5,6 +5,7 @@ const NAV_ITEMS: { screen: Screen; label: string }[] = [
   { screen: 'dashboard', label: 'Dashboard' },
   { screen: 'roster', label: 'Roster' },
   { screen: 'schedule', label: 'Schedule' },
+  { screen: 'rankings', label: 'Rankings' },
   { screen: 'training', label: 'Training' },
   { screen: 'finances', label: 'Finances' },
 ]

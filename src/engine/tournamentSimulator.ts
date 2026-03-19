@@ -3,10 +3,12 @@ import type {
   Player,
   TournamentReport,
   PlayerTournamentResult,
+  RankingEntry,
 } from '../types'
 import { calcEPR } from './rating'
 import { simulateSet } from './setSimulator'
 import { getNPCPool, drawOpponent } from './npcs'
+import { seedingAdvantage } from './ranking'
 
 // Prize distribution ratios by placement bracket.
 // Reflects standard SSBM double-elimination payout structure.
@@ -95,11 +97,15 @@ const TOURNAMENT_FATIGUE: Record<string, number> = {
 /**
  * Simulates a player's full run through a double-elimination tournament.
  * Returns placement, set history, prize, and rep gained.
+ *
+ * @param seedMult - bracket seeding advantage (0.65–1.0 from seedingAdvantage())
+ *   A top seed faces weaker opponents in early rounds, reflecting bracket protection.
  */
 function simulatePlayerRun(
   player: Player,
   tournament: Tournament,
   bracketSize: number,
+  seedMult: number,
 ): PlayerTournamentResult {
   const epr = calcEPR(player)
   const totalRounds = Math.log2(bracketSize)
@@ -112,7 +118,7 @@ function simulatePlayerRun(
   let inLosers = false
   let eliminated = false
 
-  // Average field EPR for this tier (used to calibrate opponent strength by round)
+  // Average field EPR for this tier (calibrates opponent strength by round)
   const fieldStrengthMap: Record<string, number> = {
     local: 55, regional: 80, major: 110, supermajor: 140,
   }
@@ -121,9 +127,11 @@ function simulatePlayerRun(
   while (!eliminated) {
     const currentRound = inLosers ? losersWins : winnersWins
 
-    // Opponent gets stronger in later rounds
+    // Opponent gets stronger in later rounds; early rounds softened for seeded players
     const roundProgressRatio = currentRound / totalRounds
-    const opponentTargetRating = avgFieldEPR * (0.7 + roundProgressRatio * 0.7)
+    // seedMult applies only in first half of bracket — deep runs face top seeds regardless
+    const earlyRoundFactor = roundProgressRatio < 0.5 ? seedMult : 1.0
+    const opponentTargetRating = avgFieldEPR * (0.7 + roundProgressRatio * 0.7) * earlyRoundFactor
     const opponent = drawOpponent(npcPool, opponentTargetRating)
 
     const isBo5 = currentRound >= isBo5Threshold
@@ -180,32 +188,47 @@ function simulatePlayerRun(
  * Simulates a full tournament for all registered players.
  * Returns a TournamentReport with results for each player.
  *
- * Also returns the per-player fatigue cost so the store can apply it.
+ * Also returns the per-player fatigue cost so the store can apply it,
+ * and flat TournamentResult records to write back onto the tournament object
+ * (required for ranking calculations).
+ *
+ * @param rankings - current ranking table; used to determine bracket seeding
  */
 export interface SimulationOutput {
   report: TournamentReport
-  fatigueCosts: Record<string, number>  // playerId → fatigue added
+  fatigueCosts: Record<string, number>   // playerId → fatigue added
+  tournamentResults: import('../types').TournamentResult[]  // for tournament.results
 }
 
 export function simulateTournament(
   tournament: Tournament,
   players: Player[],
+  rankings: RankingEntry[],
 ): SimulationOutput {
   const registeredPlayers = players.filter((p) =>
     tournament.registeredPlayers.includes(p.id)
   )
 
-  // Round bracket size up to nearest power of 2
   const bracketSize = Math.pow(2, Math.ceil(Math.log2(tournament.entrants)))
 
-  const playerResults: PlayerTournamentResult[] = registeredPlayers.map((p) =>
-    simulatePlayerRun(p, tournament, bracketSize)
-  )
+  const playerResults: PlayerTournamentResult[] = registeredPlayers.map((p) => {
+    const rankEntry = rankings.find((r) => r.playerId === p.id)
+    const seedMult = seedingAdvantage(rankEntry?.rank, rankings.length)
+    return simulatePlayerRun(p, tournament, bracketSize, seedMult)
+  })
 
   const fatigueCosts: Record<string, number> = {}
   registeredPlayers.forEach((p) => {
     fatigueCosts[p.id] = TOURNAMENT_FATIGUE[tournament.tier] ?? 20
   })
+
+  const tournamentResults = playerResults.map((r) => ({
+    playerId: r.playerId,
+    placement: r.placement,
+    prizeEarned: r.prizeEarned,
+    setsWon: r.setsWon,
+    setsLost: r.setsLost,
+  }))
 
   return {
     report: {
@@ -215,5 +238,6 @@ export function simulateTournament(
       playerResults,
     },
     fatigueCosts,
+    tournamentResults,
   }
 }

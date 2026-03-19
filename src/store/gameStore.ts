@@ -4,6 +4,7 @@ import type { GameState, Screen, WeekActivity, TournamentReport } from '../types
 import { STARTING_PLAYERS, STARTING_TEAM } from '../data/players'
 import { INITIAL_TOURNAMENTS } from '../data/tournaments'
 import { simulateTournament } from '../engine/tournamentSimulator'
+import { computeRankings } from '../engine/ranking'
 
 interface GameStore extends GameState {
   setScreen: (screen: Screen) => void
@@ -21,6 +22,7 @@ function initialState(): GameState {
     players: STARTING_PLAYERS,
     tournaments: INITIAL_TOURNAMENTS,
     pastResults: [],
+    rankings: [],
     pendingReport: null,
     screen: 'dashboard',
   }
@@ -47,7 +49,6 @@ export const useGameStore = create<GameStore>()(
               ? { ...t, registeredPlayers: [...t.registeredPlayers, playerId] }
               : t
           ),
-          // Deduct entry fee immediately on registration
           team: {
             ...state.team,
             balance:
@@ -66,7 +67,6 @@ export const useGameStore = create<GameStore>()(
                 ? { ...t, registeredPlayers: t.registeredPlayers.filter((id) => id !== playerId) }
                 : t
             ),
-            // Refund entry fee on unregister
             team: { ...state.team, balance: state.team.balance + (tournament?.entryFee ?? 0) },
           }
         }),
@@ -88,10 +88,7 @@ export const useGameStore = create<GameStore>()(
               ).sort(([, a], [, b]) => a - b)[0][0]
               fatigue = Math.min(100, fatigue + 15)
               form = Math.max(0, form - 5)
-              stats = {
-                ...stats,
-                [weakStat]: Math.min(99, stats[weakStat] + 2),
-              }
+              stats = { ...stats, [weakStat]: Math.min(99, stats[weakStat] + 2) }
               break
             }
             case 'rest':
@@ -120,47 +117,58 @@ export const useGameStore = create<GameStore>()(
         let prizeEarned = 0
         const newPastResults = [...state.pastResults]
 
+        // Track which tournaments get results written back
+        let updatedTournaments = [...state.tournaments]
+
         for (const tournament of thisWeekTournaments) {
-          const { report, fatigueCosts } = simulateTournament(tournament, updatedPlayers)
+          const { report, fatigueCosts, tournamentResults } = simulateTournament(
+            tournament,
+            updatedPlayers,
+            state.rankings,
+          )
           latestReport = report
 
           // Apply tournament results to players
           updatedPlayers = updatedPlayers.map((player) => {
             const result = report.playerResults.find((r) => r.playerId === player.id)
             if (!result) return player
-
-            const addedFatigue = fatigueCosts[player.id] ?? 0
             return {
               ...player,
-              fatigue: Math.min(100, player.fatigue + addedFatigue),
+              fatigue: Math.min(100, player.fatigue + (fatigueCosts[player.id] ?? 0)),
               wins: player.wins + result.setsWon,
               losses: player.losses + result.setsLost,
               reputation: Math.min(100, player.reputation + result.repGained),
             }
           })
 
-          // Accumulate prize money
           prizeEarned += report.playerResults.reduce((sum, r) => sum + r.prizeEarned, 0)
 
-          // Store results on tournament for history
-          newPastResults.push(
-            ...report.playerResults.map((r) => ({
-              playerId: r.playerId,
-              placement: r.placement,
-              prizeEarned: r.prizeEarned,
-              setsWon: r.setsWon,
-              setsLost: r.setsLost,
-            }))
+          newPastResults.push(...tournamentResults)
+
+          // Write results back onto the tournament object for ranking calculations
+          updatedTournaments = updatedTournaments.map((t) =>
+            t.id === tournament.id
+              ? { ...t, results: [...(t.results ?? []), ...tournamentResults] }
+              : t
           )
         }
 
-        // Deduct weekly salaries, add prize money
         const totalSalary = updatedPlayers.reduce((sum, p) => sum + p.salary, 0)
         const newBalance = state.team.balance - totalSalary + prizeEarned
+
+        // Recompute rankings with updated tournament results
+        const newRankings = computeRankings(
+          updatedPlayers,
+          updatedTournaments,
+          nextWeek,
+          state.rankings,
+        )
 
         set({
           players: updatedPlayers,
           pastResults: newPastResults,
+          tournaments: updatedTournaments,
+          rankings: newRankings,
           pendingReport: latestReport,
           team: { ...state.team, week: nextWeek, balance: newBalance },
         })

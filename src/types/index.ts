@@ -110,8 +110,48 @@ export interface GameState {
   players: Player[]
   tournaments: Tournament[]
   pastResults: TournamentResult[]
+  rankings: RankingEntry[]
   pendingReport: TournamentReport | null
   screen: Screen
 }
 
-export type Screen = 'dashboard' | 'roster' | 'schedule' | 'training' | 'finances'
+export type Screen = 'dashboard' | 'roster' | 'schedule' | 'rankings' | 'training' | 'finances'
+
+// ── Ranking system ────────────────────────────────────────────────────────────
+
+// A single tournament result recorded for ranking purposes
+export interface RankingResult {
+  tournamentId: string
+  tournamentName: string
+  tier: TournamentTier
+  placement: number
+  basePoints: number   // points before decay
+  earnedAtWeek: number
+}
+
+// A player's current standing in the scene ranking
+export interface RankingEntry {
+  playerId: string
+  tag: string
+  character: Character
+  points: number         // current total (sum of decayed results)
+  rank: number           // 1-indexed position
+  trend: 'up' | 'down' | 'stable'  // vs previous calculation
+  recentResults: RankingResult[]
+}
+
+// ── Attack / Shield / Grab triangle framework ─────────────────────────────────
+
+// The three fundamental combat options in SSBM neutral + dodge
+export type CombatOption = 'attack' | 'shield' | 'grab' | 'dodge'
+
+// Tracks how often an opponent chooses each option (for adaptability reads)
+export interface OptionTendencies {
+  attack: number    // frequency 0–1
+  shield: number
+  grab: number
+  dodge: number
+}
+
+// Outcome of a single neutral exchange
+export type ExchangeResult = 'player_wins' | 'opponent_wins' | 'neutral'

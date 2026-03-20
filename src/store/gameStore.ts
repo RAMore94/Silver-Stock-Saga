@@ -221,6 +221,15 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'silver-stock-saga-save',
+      version: 2,
+      // Migrate older saves that predate the ledger field
+      migrate: (persisted: unknown, fromVersion: number) => {
+        const state = persisted as Partial<GameState>
+        if (fromVersion < 2) {
+          return { ...state, ledger: state.ledger ?? [] }
+        }
+        return state
+      },
     }
   )
 )

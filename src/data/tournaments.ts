@@ -16,51 +16,54 @@ import type { Tournament, TournamentTier, TournamentRegion, Country, VenueLocati
 //  ├── western_canada — BC, AB              Vancouver, Calgary
 //  └── eastern_canada — ON, QC              Toronto, Montreal
 
+interface Coords { lat: number; lng: number }
 interface Venue {
   country: Country
   region: TournamentRegion
   state: string   // state or province abbreviation
   city: string
+  coords: Coords
 }
 
 function vl(v: Venue): VenueLocation {
-  return { country: v.country, region: v.region, state: v.state, city: v.city }
+  return { country: v.country, region: v.region, state: v.state, city: v.city, coords: v.coords }
 }
 
-// ── US venues ─────────────────────────────────────────────────────────────────
+// ── Venues ────────────────────────────────────────────────────────────────────
+// Approximate city-center coordinates (lat/lng) for future Map screen.
 const V = {
   // West (CA / NV)
-  oakland:      { country: 'US', region: 'west',          state: 'CA', city: 'Oakland'      },
-  losAngeles:   { country: 'US', region: 'west',          state: 'CA', city: 'Los Angeles'  },
-  lasVegas:     { country: 'US', region: 'west',          state: 'NV', city: 'Las Vegas'    },
+  oakland:      { country: 'US', region: 'west',           state: 'CA', city: 'Oakland',      coords: { lat: 37.8,  lng: -122.3 } },
+  losAngeles:   { country: 'US', region: 'west',           state: 'CA', city: 'Los Angeles',  coords: { lat: 34.1,  lng: -118.2 } },
+  lasVegas:     { country: 'US', region: 'west',           state: 'NV', city: 'Las Vegas',    coords: { lat: 36.2,  lng: -115.1 } },
   // Northwest (WA / OR)
-  seattle:      { country: 'US', region: 'northwest',     state: 'WA', city: 'Seattle'      },
-  portland:     { country: 'US', region: 'northwest',     state: 'OR', city: 'Portland'     },
+  seattle:      { country: 'US', region: 'northwest',      state: 'WA', city: 'Seattle',      coords: { lat: 47.6,  lng: -122.3 } },
+  portland:     { country: 'US', region: 'northwest',      state: 'OR', city: 'Portland',     coords: { lat: 45.5,  lng: -122.7 } },
   // Midwest (IL / MI / MN / IN)
-  chicago:      { country: 'US', region: 'midwest',       state: 'IL', city: 'Chicago'      },
-  detroit:      { country: 'US', region: 'midwest',       state: 'MI', city: 'Detroit'      },
-  minneapolis:  { country: 'US', region: 'midwest',       state: 'MN', city: 'Minneapolis'  },
-  bloomington:  { country: 'US', region: 'midwest',       state: 'IN', city: 'Bloomington'  },
+  chicago:      { country: 'US', region: 'midwest',        state: 'IL', city: 'Chicago',      coords: { lat: 41.9,  lng:  -87.6 } },
+  detroit:      { country: 'US', region: 'midwest',        state: 'MI', city: 'Detroit',      coords: { lat: 42.3,  lng:  -83.0 } },
+  minneapolis:  { country: 'US', region: 'midwest',        state: 'MN', city: 'Minneapolis',  coords: { lat: 44.9,  lng:  -93.2 } },
+  bloomington:  { country: 'US', region: 'midwest',        state: 'IN', city: 'Bloomington',  coords: { lat: 40.5,  lng:  -88.9 } },
   // Northeast (NY / NJ / MA / PA)
-  newYork:      { country: 'US', region: 'northeast',     state: 'NY', city: 'New York'     },
-  newark:       { country: 'US', region: 'northeast',     state: 'NJ', city: 'Newark'       },
-  boston:       { country: 'US', region: 'northeast',     state: 'MA', city: 'Boston'       },
-  philadelphia: { country: 'US', region: 'northeast',     state: 'PA', city: 'Philadelphia' },
+  newYork:      { country: 'US', region: 'northeast',      state: 'NY', city: 'New York',     coords: { lat: 40.7,  lng:  -74.0 } },
+  newark:       { country: 'US', region: 'northeast',      state: 'NJ', city: 'Newark',       coords: { lat: 40.7,  lng:  -74.2 } },
+  boston:       { country: 'US', region: 'northeast',      state: 'MA', city: 'Boston',       coords: { lat: 42.4,  lng:  -71.1 } },
+  philadelphia: { country: 'US', region: 'northeast',      state: 'PA', city: 'Philadelphia', coords: { lat: 39.9,  lng:  -75.2 } },
   // South (GA / TX / FL / VA)
-  atlanta:      { country: 'US', region: 'south',         state: 'GA', city: 'Atlanta'      },
-  houston:      { country: 'US', region: 'south',         state: 'TX', city: 'Houston'      },
-  austin:       { country: 'US', region: 'south',         state: 'TX', city: 'Austin'       },
-  orlando:      { country: 'US', region: 'south',         state: 'FL', city: 'Orlando'      },
-  richmond:     { country: 'US', region: 'south',         state: 'VA', city: 'Richmond'     },
+  atlanta:      { country: 'US', region: 'south',          state: 'GA', city: 'Atlanta',      coords: { lat: 33.7,  lng:  -84.4 } },
+  houston:      { country: 'US', region: 'south',          state: 'TX', city: 'Houston',      coords: { lat: 29.7,  lng:  -95.4 } },
+  austin:       { country: 'US', region: 'south',          state: 'TX', city: 'Austin',       coords: { lat: 30.3,  lng:  -97.7 } },
+  orlando:      { country: 'US', region: 'south',          state: 'FL', city: 'Orlando',      coords: { lat: 28.5,  lng:  -81.4 } },
+  richmond:     { country: 'US', region: 'south',          state: 'VA', city: 'Richmond',     coords: { lat: 37.5,  lng:  -77.4 } },
   // Southwest (AZ / CO)
-  phoenix:      { country: 'US', region: 'southwest',     state: 'AZ', city: 'Phoenix'      },
-  denver:       { country: 'US', region: 'southwest',     state: 'CO', city: 'Denver'       },
+  phoenix:      { country: 'US', region: 'southwest',      state: 'AZ', city: 'Phoenix',      coords: { lat: 33.4,  lng: -112.1 } },
+  denver:       { country: 'US', region: 'southwest',      state: 'CO', city: 'Denver',       coords: { lat: 39.7,  lng: -104.9 } },
   // Western Canada (BC / AB)
-  vancouver:    { country: 'CA', region: 'western_canada', state: 'BC', city: 'Vancouver'   },
-  calgary:      { country: 'CA', region: 'western_canada', state: 'AB', city: 'Calgary'     },
+  vancouver:    { country: 'CA', region: 'western_canada', state: 'BC', city: 'Vancouver',    coords: { lat: 49.2,  lng: -123.1 } },
+  calgary:      { country: 'CA', region: 'western_canada', state: 'AB', city: 'Calgary',      coords: { lat: 51.0,  lng: -114.1 } },
   // Eastern Canada (ON / QC)
-  toronto:      { country: 'CA', region: 'eastern_canada', state: 'ON', city: 'Toronto'     },
-  montreal:     { country: 'CA', region: 'eastern_canada', state: 'QC', city: 'Montreal'    },
+  toronto:      { country: 'CA', region: 'eastern_canada', state: 'ON', city: 'Toronto',      coords: { lat: 43.7,  lng:  -79.4 } },
+  montreal:     { country: 'CA', region: 'eastern_canada', state: 'QC', city: 'Montreal',     coords: { lat: 45.5,  lng:  -73.6 } },
 } satisfies Record<string, Venue>
 
 // ── Event templates ──────────────────────────────────────────────────────────

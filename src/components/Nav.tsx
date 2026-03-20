@@ -1,13 +1,22 @@
 import type { Screen } from '../types'
 import { useGameStore } from '../store/gameStore'
 
-const NAV_ITEMS: { screen: Screen; label: string }[] = [
-  { screen: 'dashboard', label: 'Dashboard' },
-  { screen: 'roster', label: 'Roster' },
-  { screen: 'schedule', label: 'Schedule' },
-  { screen: 'rankings', label: 'Rankings' },
-  { screen: 'training', label: 'Training' },
-  { screen: 'finances', label: 'Finances' },
+const CORE_SCREENS: { id: Screen; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'roster',    label: 'Roster'    },
+  { id: 'training',  label: 'Training'  },
+  { id: 'finances',  label: 'Finances'  },
+  { id: 'schedule',  label: 'Schedule'  },
+  { id: 'rankings',  label: 'Rankings'  },
+]
+
+// Future screens — navigable (show placeholder), visually dim in nav
+const FUTURE_SCREENS: { id: Screen; label: string }[] = [
+  { id: 'map',          label: 'Map'      },
+  { id: 'scouting',     label: 'Scouting' },
+  { id: 'market',       label: 'Market'   },
+  { id: 'sponsorships', label: 'Sponsors' },
+  { id: 'history',      label: 'History'  },
 ]
 
 export function Nav() {
@@ -15,37 +24,64 @@ export function Nav() {
 
   return (
     <header className="bg-[#faf4e8] border-b border-[#e8d8bc] sticky top-0 z-10">
-      <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-14">
+      <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-14 gap-4">
         {/* Logo / org name */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-[#a8c8e8] flex items-center justify-center">
-            <span className="text-xs font-bold text-[#3d2b1f]">{team.tag}</span>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-[#3d2b1f] flex items-center justify-center">
+            <span className="text-xs font-bold text-[#c9a84c]">{team.tag}</span>
           </div>
-          <span className="font-semibold text-[#3d2b1f] text-sm">{team.name}</span>
+          <span className="font-semibold text-[#3d2b1f] text-sm hidden sm:block">{team.name}</span>
         </div>
 
         {/* Nav links */}
-        <nav className="flex items-center gap-1">
-          {NAV_ITEMS.map((item) => (
+        <nav className="flex items-center gap-0.5 overflow-x-auto flex-1">
+          {/* Core screens */}
+          {CORE_SCREENS.map(({ id, label }) => (
             <button
-              key={item.screen}
-              onClick={() => setScreen(item.screen)}
+              key={id}
+              onClick={() => setScreen(id)}
               className={`
-                px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer
-                ${screen === item.screen
+                px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap
+                ${screen === id
                   ? 'bg-[#a8c8e8] text-[#3d2b1f]'
                   : 'text-[#8a6a55] hover:text-[#3d2b1f] hover:bg-[#f2e8d5]'
                 }
               `}
             >
-              {item.label}
+              {label}
+            </button>
+          ))}
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-[#e8d8bc] mx-1 shrink-0" />
+
+          {/* Future screens — faded */}
+          {FUTURE_SCREENS.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setScreen(id)}
+              title="Coming soon"
+              className={`
+                px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap
+                ${screen === id
+                  ? 'bg-[#f2e8d5] text-[#8a6a55]'
+                  : 'text-[#c8b89a] hover:text-[#8a6a55]'
+                }
+              `}
+            >
+              {label}
             </button>
           ))}
         </nav>
 
-        {/* Week + balance */}
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-[#8a6a55]">Week <span className="font-semibold text-[#3d2b1f]">{team.week}</span></span>
+        {/* Status: rep · week · balance */}
+        <div className="flex items-center gap-3 text-xs shrink-0">
+          <span className="hidden md:block text-[#8a6a55]">
+            Rep <span className="font-semibold text-[#3d2b1f]">{team.reputation}</span>
+          </span>
+          <span className="text-[#8a6a55]">
+            Wk <span className="font-semibold text-[#3d2b1f]">{team.week}</span>
+          </span>
           <span className="text-[#8a6a55]">
             <span className="font-semibold text-[#3d2b1f]">${team.balance.toLocaleString()}</span>
           </span>

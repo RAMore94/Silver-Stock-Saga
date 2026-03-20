@@ -60,6 +60,7 @@ export interface VenueLocation {
   region: TournamentRegion
   state: string   // state or province abbreviation (e.g. "CA", "ON", "BC")
   city: string
+  coords: { lat: number; lng: number }  // approximate city center — used by future Map screen
 }
 
 export interface Tournament {
@@ -130,6 +131,17 @@ export interface Team {
   week: number         // current game week (1-indexed)
 }
 
+// ── Finances ledger ───────────────────────────────────────────────────────────
+
+export type LedgerEntryType = 'salary' | 'prize' | 'entry_fee' | 'refund'
+
+export interface LedgerEntry {
+  week: number
+  type: LedgerEntryType
+  amount: number       // positive = income, negative = expense
+  description: string  // e.g. "Prize — Cipher 1st @ Genesis XII"
+}
+
 export interface GameState {
   team: Team
   players: Player[]
@@ -138,9 +150,13 @@ export interface GameState {
   rankings: RankingEntry[]
   pendingReport: TournamentReport | null
   screen: Screen
+  ledger: LedgerEntry[]
 }
 
-export type Screen = 'dashboard' | 'roster' | 'schedule' | 'rankings' | 'training' | 'finances'
+export type Screen =
+  | 'dashboard' | 'roster' | 'training' | 'finances'
+  | 'schedule' | 'rankings'
+  | 'map' | 'scouting' | 'market' | 'sponsorships' | 'history'
 
 // ── Ranking system ────────────────────────────────────────────────────────────
 

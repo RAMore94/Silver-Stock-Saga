@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { GameState, Screen, WeekActivity, TournamentReport } from '../types'
+import type { GameState, Screen, WeekActivity, TournamentReport, LedgerEntry } from '../types'
 import { STARTING_PLAYERS, STARTING_TEAM } from '../data/players'
 import { INITIAL_TOURNAMENTS } from '../data/tournaments'
 import { simulateTournament } from '../engine/tournamentSimulator'
@@ -25,6 +25,7 @@ function initialState(): GameState {
     rankings: [],
     pendingReport: null,
     screen: 'dashboard',
+    ledger: [],
   }
 }
 
@@ -43,31 +44,46 @@ export const useGameStore = create<GameStore>()(
         })),
 
       registerForTournament: (tournamentId, playerId) =>
-        set((state) => ({
-          tournaments: state.tournaments.map((t) =>
-            t.id === tournamentId && !t.registeredPlayers.includes(playerId)
-              ? { ...t, registeredPlayers: [...t.registeredPlayers, playerId] }
-              : t
-          ),
-          team: {
-            ...state.team,
-            balance:
-              state.team.balance -
-              (state.tournaments.find((t) => t.id === tournamentId)?.entryFee ?? 0),
-          },
-        })),
+        set((state) => {
+          const tournament = state.tournaments.find((t) => t.id === tournamentId)
+          if (!tournament || tournament.registeredPlayers.includes(playerId)) return state
+          const player = state.players.find((p) => p.id === playerId)
+          const entry: LedgerEntry = {
+            week: state.team.week,
+            type: 'entry_fee',
+            amount: -tournament.entryFee,
+            description: `Entry fee — ${player?.tag ?? playerId} @ ${tournament.name}`,
+          }
+          return {
+            tournaments: state.tournaments.map((t) =>
+              t.id === tournamentId
+                ? { ...t, registeredPlayers: [...t.registeredPlayers, playerId] }
+                : t
+            ),
+            team: { ...state.team, balance: state.team.balance - tournament.entryFee },
+            ledger: [...state.ledger, entry],
+          }
+        }),
 
       unregisterFromTournament: (tournamentId, playerId) =>
         set((state) => {
           const tournament = state.tournaments.find((t) => t.id === tournamentId)
           if (!tournament?.registeredPlayers.includes(playerId)) return state
+          const player = state.players.find((p) => p.id === playerId)
+          const entry: LedgerEntry = {
+            week: state.team.week,
+            type: 'refund',
+            amount: tournament.entryFee,
+            description: `Refund — ${player?.tag ?? playerId} @ ${tournament.name}`,
+          }
           return {
             tournaments: state.tournaments.map((t) =>
               t.id === tournamentId
                 ? { ...t, registeredPlayers: t.registeredPlayers.filter((id) => id !== playerId) }
                 : t
             ),
-            team: { ...state.team, balance: state.team.balance + (tournament?.entryFee ?? 0) },
+            team: { ...state.team, balance: state.team.balance + tournament.entryFee },
+            ledger: [...state.ledger, entry],
           }
         }),
 
@@ -116,6 +132,7 @@ export const useGameStore = create<GameStore>()(
         let latestReport: TournamentReport | null = null
         let prizeEarned = 0
         const newPastResults = [...state.pastResults]
+        const newLedgerEntries: LedgerEntry[] = []
 
         // Track which tournaments get results written back
         let updatedTournaments = [...state.tournaments]
@@ -141,8 +158,25 @@ export const useGameStore = create<GameStore>()(
             }
           })
 
-          prizeEarned += report.playerResults.reduce((sum, r) => sum + r.prizeEarned, 0)
+          // Record prize earnings in the ledger
+          for (const result of report.playerResults) {
+            if (result.prizeEarned > 0) {
+              const player = updatedPlayers.find((p) => p.id === result.playerId)
+              const ordinal =
+                result.placement === 1 ? '1st' :
+                result.placement === 2 ? '2nd' :
+                result.placement === 3 ? '3rd' :
+                `${result.placement}th`
+              newLedgerEntries.push({
+                week: nextWeek,
+                type: 'prize',
+                amount: result.prizeEarned,
+                description: `Prize — ${player?.tag ?? result.playerId} placed ${ordinal} @ ${tournament.name}`,
+              })
+            }
+          }
 
+          prizeEarned += report.playerResults.reduce((sum, r) => sum + r.prizeEarned, 0)
           newPastResults.push(...tournamentResults)
 
           // Write results back onto the tournament object for ranking calculations
@@ -155,6 +189,14 @@ export const useGameStore = create<GameStore>()(
 
         const totalSalary = updatedPlayers.reduce((sum, p) => sum + p.salary, 0)
         const newBalance = state.team.balance - totalSalary + prizeEarned
+
+        // Record salary deduction
+        newLedgerEntries.push({
+          week: nextWeek,
+          type: 'salary',
+          amount: -totalSalary,
+          description: `Weekly salaries — ${updatedPlayers.length} players`,
+        })
 
         // Recompute rankings with updated tournament results
         const newRankings = computeRankings(
@@ -171,6 +213,7 @@ export const useGameStore = create<GameStore>()(
           rankings: newRankings,
           pendingReport: latestReport,
           team: { ...state.team, week: nextWeek, balance: newBalance },
+          ledger: [...state.ledger, ...newLedgerEntries],
         })
       },
 

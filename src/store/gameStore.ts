@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { GameState, Screen, WeekActivity, TournamentReport, LedgerEntry } from '../types'
+import type { GameState, Screen, WeekActivity, TournamentReport, LedgerEntry, Player } from '../types'
 import { STARTING_PLAYERS, STARTING_TEAM } from '../data/players'
 import { INITIAL_TOURNAMENTS } from '../data/tournaments'
+import { INITIAL_FREE_AGENTS } from '../data/freeAgents'
+import { SPONSORS } from '../data/sponsors'
 import { simulateTournament } from '../engine/tournamentSimulator'
 import { computeRankings } from '../engine/ranking'
 
@@ -14,12 +16,20 @@ interface GameStore extends GameState {
   dismissReport: () => void
   advanceWeek: () => void
   resetGame: () => void
+  // Market
+  signFreeAgent: (agentId: string) => void
+  releasePlayer: (playerId: string) => void
+  // Sponsorships
+  signSponsor: (sponsorId: string) => void
+  dropSponsor: (sponsorId: string) => void
 }
 
 function initialState(): GameState {
   return {
     team: STARTING_TEAM,
     players: STARTING_PLAYERS,
+    freeAgents: INITIAL_FREE_AGENTS,
+    activeSponsors: [],
     tournaments: INITIAL_TOURNAMENTS,
     pastResults: [],
     rankings: [],
@@ -188,7 +198,6 @@ export const useGameStore = create<GameStore>()(
         }
 
         const totalSalary = updatedPlayers.reduce((sum, p) => sum + p.salary, 0)
-        const newBalance = state.team.balance - totalSalary + prizeEarned
 
         // Record salary deduction
         newLedgerEntries.push({
@@ -197,6 +206,22 @@ export const useGameStore = create<GameStore>()(
           amount: -totalSalary,
           description: `Weekly salaries — ${updatedPlayers.length} players`,
         })
+
+        // Sponsor income
+        let sponsorIncome = 0
+        for (const sponsorId of state.activeSponsors) {
+          const sponsor = SPONSORS.find((s) => s.id === sponsorId)
+          if (!sponsor) continue
+          sponsorIncome += sponsor.weeklyIncome
+          newLedgerEntries.push({
+            week: nextWeek,
+            type: 'sponsor',
+            amount: sponsor.weeklyIncome,
+            description: `Sponsor income — ${sponsor.name}`,
+          })
+        }
+
+        const newBalance = state.team.balance - totalSalary + prizeEarned + sponsorIncome
 
         // Recompute rankings with updated tournament results
         const newRankings = computeRankings(
@@ -218,15 +243,65 @@ export const useGameStore = create<GameStore>()(
       },
 
       resetGame: () => set(initialState()),
+
+      signFreeAgent: (agentId) =>
+        set((state) => {
+          if (state.players.length >= 5) return state
+          const agent = state.freeAgents.find((a) => a.id === agentId)
+          if (!agent) return state
+          if (state.team.balance < agent.salaryAsk * 4) return state
+          const newPlayer: Player = {
+            id: agent.id,
+            name: agent.name,
+            tag: agent.tag,
+            character: agent.character,
+            stats: agent.stats,
+            form: agent.form,
+            fatigue: agent.fatigue,
+            salary: agent.salaryAsk,
+            weekActivity: 'train',
+            wins: 0,
+            losses: 0,
+            reputation: agent.reputation,
+          }
+          return {
+            players: [...state.players, newPlayer],
+            freeAgents: state.freeAgents.filter((a) => a.id !== agentId),
+          }
+        }),
+
+      releasePlayer: (playerId) =>
+        set((state) => {
+          if (state.players.length <= 1) return state
+          return {
+            players: state.players.filter((p) => p.id !== playerId),
+          }
+        }),
+
+      signSponsor: (sponsorId) =>
+        set((state) => {
+          if (state.activeSponsors.length >= 2) return state
+          if (state.activeSponsors.includes(sponsorId)) return state
+          const sponsor = SPONSORS.find((s) => s.id === sponsorId)
+          if (!sponsor || state.team.reputation < sponsor.repRequired) return state
+          return { activeSponsors: [...state.activeSponsors, sponsorId] }
+        }),
+
+      dropSponsor: (sponsorId) =>
+        set((state) => ({
+          activeSponsors: state.activeSponsors.filter((id) => id !== sponsorId),
+        })),
     }),
     {
       name: 'silver-stock-saga-save',
-      version: 2,
-      // Migrate older saves that predate the ledger field
+      version: 3,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<GameState>
         if (fromVersion < 2) {
-          return { ...state, ledger: state.ledger ?? [] }
+          return { ...state, ledger: state.ledger ?? [], freeAgents: INITIAL_FREE_AGENTS, activeSponsors: [] }
+        }
+        if (fromVersion < 3) {
+          return { ...state, freeAgents: state.freeAgents ?? INITIAL_FREE_AGENTS, activeSponsors: state.activeSponsors ?? [] }
         }
         return state
       },

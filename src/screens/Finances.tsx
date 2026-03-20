@@ -11,6 +11,7 @@ function formatAmount(amount: number): string {
 const LEDGER_COLORS: Record<LedgerEntry['type'], string> = {
   prize:     '#7aaa7a',
   refund:    '#7aaa7a',
+  sponsor:   '#6b9bd2',
   entry_fee: '#c97070',
   salary:    '#c97070',
 }
@@ -18,6 +19,7 @@ const LEDGER_COLORS: Record<LedgerEntry['type'], string> = {
 const LEDGER_LABELS: Record<LedgerEntry['type'], string> = {
   prize:     'Prize',
   refund:    'Refund',
+  sponsor:   'Sponsor',
   entry_fee: 'Entry Fee',
   salary:    'Salary',
 }

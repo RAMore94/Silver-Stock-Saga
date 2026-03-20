@@ -133,7 +133,35 @@ export interface Team {
 
 // ── Finances ledger ───────────────────────────────────────────────────────────
 
-export type LedgerEntryType = 'salary' | 'prize' | 'entry_fee' | 'refund'
+export type LedgerEntryType = 'salary' | 'prize' | 'entry_fee' | 'refund' | 'sponsor'
+
+// ── Free agency ───────────────────────────────────────────────────────────────
+
+export interface FreeAgent {
+  id: string
+  name: string
+  tag: string
+  character: Character
+  stats: PlayerStats
+  form: number         // 0–100
+  fatigue: number      // 0–100
+  salaryAsk: number    // weekly salary demand in dollars
+  reputation: number   // 0–100
+}
+
+// ── Sponsorships ─────────────────────────────────────────────────────────────
+
+export type SponsorTier = 'bronze' | 'silver' | 'gold' | 'platinum'
+
+export interface Sponsor {
+  id: string
+  name: string
+  tier: SponsorTier
+  repRequired: number   // minimum team.reputation to unlock
+  weeklyIncome: number
+  description: string   // flavor + mechanical bonus description
+  color: string         // brand accent hex
+}
 
 export interface LedgerEntry {
   week: number
@@ -145,6 +173,8 @@ export interface LedgerEntry {
 export interface GameState {
   team: Team
   players: Player[]
+  freeAgents: FreeAgent[]
+  activeSponsors: string[]     // up to 2 active sponsor IDs
   tournaments: Tournament[]
   pastResults: TournamentResult[]
   rankings: RankingEntry[]

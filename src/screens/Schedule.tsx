@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGameStore } from '../store/gameStore'
-import type { Tournament, TournamentRegion } from '../types'
+import type { Tournament, TournamentRegion, VenueLocation } from '../types'
 
 const TIER_LABELS = {
   local: 'Local',
@@ -19,27 +19,67 @@ const TIER_COLORS = {
 // ── Region metadata ───────────────────────────────────────────────────────────
 
 const REGION_LABELS: Record<TournamentRegion, string> = {
-  west:      'West',
-  northwest: 'Northwest',
-  midwest:   'Midwest',
-  northeast: 'Northeast',
-  south:     'South',
-  southwest: 'Southwest',
+  west:           'West',
+  northwest:      'Northwest',
+  midwest:        'Midwest',
+  northeast:      'Northeast',
+  south:          'South',
+  southwest:      'Southwest',
+  western_canada: 'Western Canada',
+  eastern_canada: 'Eastern Canada',
 }
 
-// Soft background colors per region — earthy palette to match the app
+const REGION_COUNTRY: Record<TournamentRegion, string> = {
+  west:           'United States',
+  northwest:      'United States',
+  midwest:        'United States',
+  northeast:      'United States',
+  south:          'United States',
+  southwest:      'United States',
+  western_canada: 'Canada',
+  eastern_canada: 'Canada',
+}
+
 const REGION_COLORS: Record<TournamentRegion, string> = {
-  west:      '#7aaa7a',   // coastal green
-  northwest: '#5a9a8a',   // Pacific teal
-  midwest:   '#c9a84c',   // golden amber
-  northeast: '#6a8ab8',   // steel blue
-  south:     '#c97070',   // warm red
-  southwest: '#b87a50',   // terracotta
+  west:           '#7aaa7a',   // coastal green
+  northwest:      '#5a9a8a',   // Pacific teal
+  midwest:        '#c9a84c',   // golden amber
+  northeast:      '#6a8ab8',   // steel blue
+  south:          '#c97070',   // warm red
+  southwest:      '#b87a50',   // terracotta
+  western_canada: '#4a8ab0',   // glacier blue
+  eastern_canada: '#7a70c0',   // maple purple
 }
 
-const ALL_REGIONS: TournamentRegion[] = ['west', 'northwest', 'midwest', 'northeast', 'south', 'southwest']
+const ALL_REGIONS: TournamentRegion[] = [
+  'west', 'northwest', 'midwest', 'northeast', 'south', 'southwest',
+  'western_canada', 'eastern_canada',
+]
 
-// Map weeks to months (52-week season starting in January)
+// ── Location formatting ───────────────────────────────────────────────────────
+//
+// Display hierarchy: Country · Region · Province/State · City
+//   Short form (row label):  "Vancouver, BC"  or  "Vancouver, BC, CA"
+//   Full breadcrumb:         "Canada · Western Canada · BC · Vancouver"
+
+function LocationBreadcrumb({ loc }: { loc: VenueLocation }) {
+  const country = loc.country === 'CA' ? 'Canada' : 'United States'
+  const region = REGION_LABELS[loc.region]
+  return (
+    <span className="text-xs text-[#8a6a55]">
+      <span className="opacity-60">{country}</span>
+      <span className="opacity-40 mx-1">·</span>
+      <span className="opacity-60">{region}</span>
+      <span className="opacity-40 mx-1">·</span>
+      <span className="opacity-60">{loc.state}</span>
+      <span className="opacity-40 mx-1">·</span>
+      <span className="font-medium text-[#5a4a3a]">{loc.city}</span>
+    </span>
+  )
+}
+
+// ── Month grouping ────────────────────────────────────────────────────────────
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -111,7 +151,8 @@ function TournamentRow({ t, team, players, registerForTournament, unregisterFrom
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+        {/* Name + badges */}
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className="text-sm font-semibold text-[#3d2b1f]">{t.name}</span>
           <span
             className="text-xs font-medium px-2 py-0.5 rounded-full"
@@ -127,9 +168,11 @@ function TournamentRow({ t, team, players, registerForTournament, unregisterFrom
           )}
         </div>
 
-        {/* Location + details */}
-        <div className="text-xs text-[#8a6a55] flex flex-wrap gap-x-4 gap-y-0.5">
-          <span className="font-medium">{t.location}</span>
+        {/* Full location breadcrumb */}
+        <LocationBreadcrumb loc={t.location} />
+
+        {/* Event details */}
+        <div className="text-xs text-[#8a6a55] flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
           <span>{t.entrants} entrants</span>
           <span>${t.prizePool.toLocaleString()} pool</span>
           <span>${t.entryFee}/player</span>
@@ -161,16 +204,12 @@ function TournamentRow({ t, team, players, registerForTournament, unregisterFrom
           </div>
         )}
 
-        {/* Show registered players on current/past tournaments */}
         {!canRegister && t.registeredPlayers.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2.5">
             {t.registeredPlayers.map((pid) => {
               const p = players.find((pl) => pl.id === pid)
               return (
-                <span
-                  key={pid}
-                  className="text-xs px-3 py-1 rounded-full bg-[#3d2b1f] text-[#faf4e8]"
-                >
+                <span key={pid} className="text-xs px-3 py-1 rounded-full bg-[#3d2b1f] text-[#faf4e8]">
                   {p?.tag ?? pid}
                 </span>
               )
@@ -179,7 +218,7 @@ function TournamentRow({ t, team, players, registerForTournament, unregisterFrom
         )}
       </div>
 
-      {/* Weeks away indicator */}
+      {/* Weeks away */}
       {!isPast && !isCurrent && (
         <div className="text-xs text-[#8a6a55] shrink-0 self-center whitespace-nowrap">
           in {weeksAway} wk{weeksAway !== 1 ? 's' : ''}
@@ -199,60 +238,72 @@ function RegionFilter({
   onChange: (r: TournamentRegion | null) => void
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      <button
-        onClick={() => onChange(null)}
-        className={`text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
-          active === null
-            ? 'bg-[#3d2b1f] text-[#faf4e8] border-[#3d2b1f]'
-            : 'bg-transparent text-[#8a6a55] border-[#c8b89a] hover:border-[#3d2b1f] hover:text-[#3d2b1f]'
-        }`}
-      >
-        All Regions
-      </button>
-      {ALL_REGIONS.map((r) => {
-        const color = REGION_COLORS[r]
-        const isActive = active === r
+    <div className="flex flex-col gap-2">
+      {/* Country groupings */}
+      {(['United States', 'Canada'] as const).map((country) => {
+        const regions = ALL_REGIONS.filter((r) => REGION_COUNTRY[r] === country)
         return (
-          <button
-            key={r}
-            onClick={() => onChange(isActive ? null : r)}
-            className="text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer"
-            style={
-              isActive
-                ? { backgroundColor: color, color: '#faf4e8', borderColor: color }
-                : { backgroundColor: `${color}15`, color, borderColor: `${color}55` }
-            }
-          >
-            {REGION_LABELS[r]}
-          </button>
+          <div key={country} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[#8a6a55] w-24 shrink-0">{country}</span>
+            {regions.map((r) => {
+              const color = REGION_COLORS[r]
+              const isActive = active === r
+              return (
+                <button
+                  key={r}
+                  onClick={() => onChange(isActive ? null : r)}
+                  className="text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer"
+                  style={
+                    isActive
+                      ? { backgroundColor: color, color: '#faf4e8', borderColor: color }
+                      : { backgroundColor: `${color}15`, color, borderColor: `${color}55` }
+                  }
+                >
+                  {REGION_LABELS[r]}
+                </button>
+              )
+            })}
+          </div>
         )
       })}
+      {active && (
+        <button
+          onClick={() => onChange(null)}
+          className="self-start text-xs text-[#8a6a55] underline cursor-pointer"
+        >
+          Clear filter
+        </button>
+      )}
     </div>
   )
 }
 
-// ── Region summary strip ──────────────────────────────────────────────────────
+// ── Region summary panel ──────────────────────────────────────────────────────
 
 function RegionSummary({ tournaments }: { tournaments: Tournament[] }) {
   const counts: Partial<Record<TournamentRegion, number>> = {}
-  for (const t of tournaments) {
-    counts[t.region] = (counts[t.region] ?? 0) + 1
-  }
+  for (const t of tournaments) counts[t.region] = (counts[t.region] ?? 0) + 1
 
   return (
-    <div className="flex flex-wrap gap-3">
-      {ALL_REGIONS.filter((r) => counts[r]).map((r) => {
-        const color = REGION_COLORS[r]
+    <div className="flex flex-col gap-3">
+      {(['United States', 'Canada'] as const).map((country) => {
+        const regions = ALL_REGIONS.filter((r) => REGION_COUNTRY[r] === country && counts[r])
+        if (regions.length === 0) return null
         return (
-          <div
-            key={r}
-            className="flex items-center gap-1.5 text-xs"
-            style={{ color }}
-          >
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-            <span className="font-medium">{REGION_LABELS[r]}</span>
-            <span className="opacity-60">{counts[r]} events</span>
+          <div key={country}>
+            <div className="text-xs text-[#8a6a55] mb-1.5">{country}</div>
+            <div className="flex flex-wrap gap-3">
+              {regions.map((r) => {
+                const color = REGION_COLORS[r]
+                return (
+                  <div key={r} className="flex items-center gap-1.5 text-xs" style={{ color }}>
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                    <span className="font-medium">{REGION_LABELS[r]}</span>
+                    <span className="opacity-60">{counts[r]} events</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )
       })}
@@ -282,14 +333,17 @@ export function Schedule() {
         </p>
       </div>
 
-      {/* Region overview */}
+      {/* Circuits overview */}
       <div className="bg-[#faf4e8] rounded-2xl border border-[#e8d8bc] px-5 py-4 flex flex-col gap-3">
         <div className="text-xs font-medium text-[#8a6a55] uppercase tracking-wider">Circuits</div>
         <RegionSummary tournaments={sorted} />
       </div>
 
-      {/* Filter bar */}
-      <RegionFilter active={regionFilter} onChange={setRegionFilter} />
+      {/* Region filter */}
+      <div className="bg-[#faf4e8] rounded-2xl border border-[#e8d8bc] px-5 py-4 flex flex-col gap-3">
+        <div className="text-xs font-medium text-[#8a6a55] uppercase tracking-wider">Filter by Region</div>
+        <RegionFilter active={regionFilter} onChange={setRegionFilter} />
+      </div>
 
       {/* Month groups */}
       {Array.from(monthGroups.entries())
@@ -301,7 +355,6 @@ export function Schedule() {
 
           return (
             <div key={monthIdx}>
-              {/* Month header */}
               <div className={`flex items-center gap-3 mb-3 ${isPastMonth ? 'opacity-40' : ''}`}>
                 <h2 className="text-sm font-semibold text-[#3d2b1f]">{MONTH_NAMES[monthIdx]}</h2>
                 <div className="text-xs text-[#8a6a55]">Weeks {startWk}&ndash;{endWk}</div>

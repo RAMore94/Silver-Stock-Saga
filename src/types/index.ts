@@ -41,8 +41,26 @@ export interface Player {
 
 export type TournamentTier = 'local' | 'regional' | 'major' | 'supermajor'
 
-// Broad US regional circuits — used for scene filtering and rep tracking
-export type TournamentRegion = 'west' | 'northwest' | 'midwest' | 'northeast' | 'south' | 'southwest'
+// Broad scene circuits — US regions + Canadian regions
+export type TournamentRegion =
+  | 'west'
+  | 'northwest'
+  | 'midwest'
+  | 'northeast'
+  | 'south'
+  | 'southwest'
+  | 'western_canada'
+  | 'eastern_canada'
+
+export type Country = 'US' | 'CA'
+
+// Structured location — full Country → Region → Province/State → City hierarchy
+export interface VenueLocation {
+  country: Country
+  region: TournamentRegion
+  state: string   // state or province abbreviation (e.g. "CA", "ON", "BC")
+  city: string
+}
 
 export interface Tournament {
   id: string
@@ -50,7 +68,7 @@ export interface Tournament {
   tier: TournamentTier
   region: TournamentRegion
   week: number         // which game week it occurs
-  location: string     // "City, ST" format (e.g. "Oakland, CA")
+  location: VenueLocation
   entrants: number     // estimated field size
   prizePool: number    // total prize pool in dollars
   entryFee: number     // per player

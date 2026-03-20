@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useGameStore } from '../store/gameStore'
-import type { Tournament } from '../types'
+import type { Tournament, TournamentRegion } from '../types'
 
 const TIER_LABELS = {
   local: 'Local',
@@ -14,6 +15,29 @@ const TIER_COLORS = {
   major: '#c97070',
   supermajor: '#805080',
 }
+
+// ── Region metadata ───────────────────────────────────────────────────────────
+
+const REGION_LABELS: Record<TournamentRegion, string> = {
+  west:      'West',
+  northwest: 'Northwest',
+  midwest:   'Midwest',
+  northeast: 'Northeast',
+  south:     'South',
+  southwest: 'Southwest',
+}
+
+// Soft background colors per region — earthy palette to match the app
+const REGION_COLORS: Record<TournamentRegion, string> = {
+  west:      '#7aaa7a',   // coastal green
+  northwest: '#5a9a8a',   // Pacific teal
+  midwest:   '#c9a84c',   // golden amber
+  northeast: '#6a8ab8',   // steel blue
+  south:     '#c97070',   // warm red
+  southwest: '#b87a50',   // terracotta
+}
+
+const ALL_REGIONS: TournamentRegion[] = ['west', 'northwest', 'midwest', 'northeast', 'south', 'southwest']
 
 // Map weeks to months (52-week season starting in January)
 const MONTH_NAMES = [
@@ -41,6 +65,20 @@ function groupByMonth(tournaments: Tournament[]): Map<number, Tournament[]> {
     groups.set(month, list)
   }
   return groups
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function RegionBadge({ region }: { region: TournamentRegion }) {
+  const color = REGION_COLORS[region]
+  return (
+    <span
+      className="text-xs font-medium px-2 py-0.5 rounded-full"
+      style={{ color, backgroundColor: `${color}22` }}
+    >
+      {REGION_LABELS[region]}
+    </span>
+  )
 }
 
 function TournamentRow({ t, team, players, registerForTournament, unregisterFromTournament }: {
@@ -81,6 +119,7 @@ function TournamentRow({ t, team, players, registerForTournament, unregisterFrom
           >
             {TIER_LABELS[t.tier]}
           </span>
+          <RegionBadge region={t.region} />
           {isCurrent && (
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#3d2b1f] text-[#faf4e8]">
               This Week
@@ -150,15 +189,91 @@ function TournamentRow({ t, team, players, registerForTournament, unregisterFrom
   )
 }
 
+// ── Region filter bar ─────────────────────────────────────────────────────────
+
+function RegionFilter({
+  active,
+  onChange,
+}: {
+  active: TournamentRegion | null
+  onChange: (r: TournamentRegion | null) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        onClick={() => onChange(null)}
+        className={`text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+          active === null
+            ? 'bg-[#3d2b1f] text-[#faf4e8] border-[#3d2b1f]'
+            : 'bg-transparent text-[#8a6a55] border-[#c8b89a] hover:border-[#3d2b1f] hover:text-[#3d2b1f]'
+        }`}
+      >
+        All Regions
+      </button>
+      {ALL_REGIONS.map((r) => {
+        const color = REGION_COLORS[r]
+        const isActive = active === r
+        return (
+          <button
+            key={r}
+            onClick={() => onChange(isActive ? null : r)}
+            className="text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer"
+            style={
+              isActive
+                ? { backgroundColor: color, color: '#faf4e8', borderColor: color }
+                : { backgroundColor: `${color}15`, color, borderColor: `${color}55` }
+            }
+          >
+            {REGION_LABELS[r]}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Region summary strip ──────────────────────────────────────────────────────
+
+function RegionSummary({ tournaments }: { tournaments: Tournament[] }) {
+  const counts: Partial<Record<TournamentRegion, number>> = {}
+  for (const t of tournaments) {
+    counts[t.region] = (counts[t.region] ?? 0) + 1
+  }
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      {ALL_REGIONS.filter((r) => counts[r]).map((r) => {
+        const color = REGION_COLORS[r]
+        return (
+          <div
+            key={r}
+            className="flex items-center gap-1.5 text-xs"
+            style={{ color }}
+          >
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+            <span className="font-medium">{REGION_LABELS[r]}</span>
+            <span className="opacity-60">{counts[r]} events</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+
 export function Schedule() {
   const { tournaments, team, players, registerForTournament, unregisterFromTournament } = useGameStore()
+  const [regionFilter, setRegionFilter] = useState<TournamentRegion | null>(null)
 
   const sorted = [...tournaments].sort((a, b) => a.week - b.week)
-  const monthGroups = groupByMonth(sorted)
+  const filtered = regionFilter ? sorted.filter((t) => t.region === regionFilter) : sorted
+  const monthGroups = groupByMonth(filtered)
   const currentMonth = getMonth(team.week)
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-6">
+      {/* Header */}
       <div>
         <div className="text-xs text-[#8a6a55] uppercase tracking-wider font-medium mb-1">Schedule</div>
         <h1 className="text-2xl font-semibold text-[#3d2b1f]">Tournament Calendar</h1>
@@ -167,6 +282,16 @@ export function Schedule() {
         </p>
       </div>
 
+      {/* Region overview */}
+      <div className="bg-[#faf4e8] rounded-2xl border border-[#e8d8bc] px-5 py-4 flex flex-col gap-3">
+        <div className="text-xs font-medium text-[#8a6a55] uppercase tracking-wider">Circuits</div>
+        <RegionSummary tournaments={sorted} />
+      </div>
+
+      {/* Filter bar */}
+      <RegionFilter active={regionFilter} onChange={setRegionFilter} />
+
+      {/* Month groups */}
       {Array.from(monthGroups.entries())
         .sort(([a], [b]) => a - b)
         .map(([monthIdx, monthTournaments]) => {
@@ -179,7 +304,7 @@ export function Schedule() {
               {/* Month header */}
               <div className={`flex items-center gap-3 mb-3 ${isPastMonth ? 'opacity-40' : ''}`}>
                 <h2 className="text-sm font-semibold text-[#3d2b1f]">{MONTH_NAMES[monthIdx]}</h2>
-                <div className="text-xs text-[#8a6a55]">Weeks {startWk}\u2013{endWk}</div>
+                <div className="text-xs text-[#8a6a55]">Weeks {startWk}&ndash;{endWk}</div>
                 {isCurrentMonth && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#3d2b1f]/10 text-[#3d2b1f]">
                     Current
@@ -206,6 +331,12 @@ export function Schedule() {
             </div>
           )
         })}
+
+      {filtered.length === 0 && (
+        <div className="text-sm text-[#8a6a55] text-center py-12">
+          No events found for this region.
+        </div>
+      )}
     </div>
   )
 }

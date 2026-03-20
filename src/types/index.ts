@@ -41,10 +41,14 @@ export interface Player {
 
 export type TournamentTier = 'local' | 'regional' | 'major' | 'supermajor'
 
+// Broad US regional circuits — used for scene filtering and rep tracking
+export type TournamentRegion = 'west' | 'northwest' | 'midwest' | 'northeast' | 'south' | 'southwest'
+
 export interface Tournament {
   id: string
   name: string
   tier: TournamentTier
+  region: TournamentRegion
   week: number         // which game week it occurs
   location: string     // "City, ST" format (e.g. "Oakland, CA")
   entrants: number     // estimated field size

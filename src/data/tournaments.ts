@@ -1,30 +1,41 @@
-import type { Tournament, TournamentTier } from '../types'
+import type { Tournament, TournamentTier, TournamentRegion } from '../types'
 
 // ── Venues ───────────────────────────────────────────────────────────────────
+//
+// US regional breakdown:
+//   west      — California (CA), Nevada (NV)             [Oakland, LA, Las Vegas]
+//   northwest — Washington (WA), Oregon (OR)             [Seattle, Portland]
+//   midwest   — Illinois (IL), Michigan (MI),
+//               Minnesota (MN), Indiana (IN)             [Chicago, Detroit, Minneapolis, Bloomington]
+//   northeast — New York (NY), New Jersey (NJ),
+//               Massachusetts (MA), Pennsylvania (PA)    [NYC, Newark, Boston, Philadelphia]
+//   south     — Georgia (GA), Texas (TX),
+//               Florida (FL), Virginia (VA)              [Atlanta, Houston, Austin, Orlando, Richmond]
+//   southwest — Arizona (AZ), Colorado (CO)              [Phoenix, Denver]
 
-interface Venue { city: string; state: string }
+interface Venue { city: string; state: string; region: TournamentRegion }
 
 const V = {
-  oakland:      { city: 'Oakland',       state: 'CA' },
-  losAngeles:   { city: 'Los Angeles',   state: 'CA' },
-  newYork:      { city: 'New York',      state: 'NY' },
-  newark:       { city: 'Newark',        state: 'NJ' },
-  chicago:      { city: 'Chicago',       state: 'IL' },
-  houston:      { city: 'Houston',       state: 'TX' },
-  austin:       { city: 'Austin',        state: 'TX' },
-  atlanta:      { city: 'Atlanta',       state: 'GA' },
-  orlando:      { city: 'Orlando',       state: 'FL' },
-  detroit:      { city: 'Detroit',       state: 'MI' },
-  boston:        { city: 'Boston',        state: 'MA' },
-  seattle:      { city: 'Seattle',       state: 'WA' },
-  portland:     { city: 'Portland',      state: 'OR' },
-  lasVegas:     { city: 'Las Vegas',     state: 'NV' },
-  minneapolis:  { city: 'Minneapolis',   state: 'MN' },
-  bloomington:  { city: 'Bloomington',   state: 'IN' },
-  phoenix:      { city: 'Phoenix',       state: 'AZ' },
-  denver:       { city: 'Denver',        state: 'CO' },
-  philadelphia: { city: 'Philadelphia',  state: 'PA' },
-  richmond:     { city: 'Richmond',      state: 'VA' },
+  oakland:      { city: 'Oakland',       state: 'CA', region: 'west'      },
+  losAngeles:   { city: 'Los Angeles',   state: 'CA', region: 'west'      },
+  newYork:      { city: 'New York',      state: 'NY', region: 'northeast' },
+  newark:       { city: 'Newark',        state: 'NJ', region: 'northeast' },
+  chicago:      { city: 'Chicago',       state: 'IL', region: 'midwest'   },
+  houston:      { city: 'Houston',       state: 'TX', region: 'south'     },
+  austin:       { city: 'Austin',        state: 'TX', region: 'south'     },
+  atlanta:      { city: 'Atlanta',       state: 'GA', region: 'south'     },
+  orlando:      { city: 'Orlando',       state: 'FL', region: 'south'     },
+  detroit:      { city: 'Detroit',       state: 'MI', region: 'midwest'   },
+  boston:       { city: 'Boston',        state: 'MA', region: 'northeast' },
+  seattle:      { city: 'Seattle',       state: 'WA', region: 'northwest' },
+  portland:     { city: 'Portland',      state: 'OR', region: 'northwest' },
+  lasVegas:     { city: 'Las Vegas',     state: 'NV', region: 'west'      },
+  minneapolis:  { city: 'Minneapolis',   state: 'MN', region: 'midwest'   },
+  bloomington:  { city: 'Bloomington',   state: 'IN', region: 'midwest'   },
+  phoenix:      { city: 'Phoenix',       state: 'AZ', region: 'southwest' },
+  denver:       { city: 'Denver',        state: 'CO', region: 'southwest' },
+  philadelphia: { city: 'Philadelphia',  state: 'PA', region: 'northeast' },
+  richmond:     { city: 'Richmond',      state: 'VA', region: 'south'     },
 } as const
 
 function loc(v: Venue): string { return `${v.city}, ${v.state}` }
@@ -34,6 +45,7 @@ function loc(v: Venue): string { return `${v.city}, ${v.state}` }
 interface EventDef {
   name: string
   tier: TournamentTier
+  region: TournamentRegion
   week: number
   location: string
   entrants: number
@@ -41,44 +53,57 @@ interface EventDef {
   entryFee: number
 }
 
+// Helper: build an EventDef from a venue (pulls region automatically)
+function ev(
+  name: string,
+  tier: TournamentTier,
+  week: number,
+  venue: Venue,
+  entrants: number,
+  prizePool: number,
+  entryFee: number,
+): EventDef {
+  return { name, tier, region: venue.region, week, location: loc(venue), entrants, prizePool, entryFee }
+}
+
 // 4 supermajors — the biggest events of the year, roughly quarterly
 const SUPERMAJORS: EventDef[] = [
-  { name: 'Genesis XII',       tier: 'supermajor', week: 8,  location: loc(V.oakland),     entrants: 1024, prizePool: 75000, entryFee: 75 },
-  { name: 'Apex 2024',         tier: 'supermajor', week: 21, location: loc(V.newark),      entrants: 1024, prizePool: 60000, entryFee: 70 },
-  { name: 'The Big House XI',  tier: 'supermajor', week: 34, location: loc(V.detroit),     entrants: 1200, prizePool: 80000, entryFee: 80 },
-  { name: 'Shine 2024',        tier: 'supermajor', week: 47, location: loc(V.boston),       entrants: 1024, prizePool: 65000, entryFee: 70 },
+  ev('Genesis XII',      'supermajor', 8,  V.oakland,    1024, 75000, 75),
+  ev('Apex 2024',        'supermajor', 21, V.newark,     1024, 60000, 70),
+  ev('The Big House XI', 'supermajor', 34, V.detroit,    1200, 80000, 80),
+  ev('Shine 2024',       'supermajor', 47, V.boston,     1024, 65000, 70),
 ]
 
 // 8 majors — one headline event per month (outside supermajor months)
 const MAJORS: EventDef[] = [
-  { name: 'Catalyst',          tier: 'major', week: 4,  location: loc(V.losAngeles),   entrants: 512,  prizePool: 20000, entryFee: 60 },
-  { name: 'Frostbite',         tier: 'major', week: 12, location: loc(V.minneapolis),  entrants: 512,  prizePool: 18000, entryFee: 55 },
-  { name: 'Full Bloom',        tier: 'major', week: 16, location: loc(V.bloomington),  entrants: 512,  prizePool: 15000, entryFee: 50 },
-  { name: 'Riptide',           tier: 'major', week: 25, location: loc(V.atlanta),      entrants: 640,  prizePool: 22000, entryFee: 60 },
-  { name: 'Smash Factor',      tier: 'major', week: 29, location: loc(V.houston),      entrants: 512,  prizePool: 18000, entryFee: 55 },
-  { name: 'Nightclub',         tier: 'major', week: 38, location: loc(V.chicago),      entrants: 512,  prizePool: 20000, entryFee: 55 },
-  { name: 'Mainstage',         tier: 'major', week: 42, location: loc(V.losAngeles),   entrants: 640,  prizePool: 22000, entryFee: 60 },
-  { name: 'Summit',            tier: 'major', week: 50, location: loc(V.lasVegas),     entrants: 512,  prizePool: 25000, entryFee: 60 },
+  ev('Catalyst',    'major', 4,  V.losAngeles,  512, 20000, 60),
+  ev('Frostbite',   'major', 12, V.minneapolis, 512, 18000, 55),
+  ev('Full Bloom',  'major', 16, V.bloomington, 512, 15000, 50),
+  ev('Riptide',     'major', 25, V.atlanta,     640, 22000, 60),
+  ev('Smash Factor','major', 29, V.houston,     512, 18000, 55),
+  ev('Nightclub',   'major', 38, V.chicago,     512, 20000, 55),
+  ev('Mainstage',   'major', 42, V.losAngeles,  640, 22000, 60),
+  ev('Summit',      'major', 50, V.lasVegas,    512, 25000, 60),
 ]
 
-// ~18 regionals — scattered across the calendar, various cities
+// 16 regionals — scattered across the calendar, one per active scene per quarter
 const REGIONALS: EventDef[] = [
-  { name: 'Pacific Rising',        tier: 'regional', week: 2,  location: loc(V.losAngeles),   entrants: 192, prizePool: 3200,  entryFee: 30 },
-  { name: 'Emerald City Classic',  tier: 'regional', week: 6,  location: loc(V.seattle),      entrants: 160, prizePool: 2800,  entryFee: 25 },
-  { name: 'Triforce Tournament',   tier: 'regional', week: 10, location: loc(V.newYork),      entrants: 224, prizePool: 4000,  entryFee: 30 },
-  { name: 'Heartland Havoc',       tier: 'regional', week: 14, location: loc(V.chicago),      entrants: 192, prizePool: 3500,  entryFee: 30 },
-  { name: 'Lone Star Throwdown',   tier: 'regional', week: 18, location: loc(V.austin),       entrants: 160, prizePool: 2800,  entryFee: 25 },
-  { name: 'Liberty Bell Brawl',    tier: 'regional', week: 19, location: loc(V.philadelphia), entrants: 128, prizePool: 2400,  entryFee: 25 },
-  { name: 'Summer Stockade',       tier: 'regional', week: 23, location: loc(V.orlando),      entrants: 256, prizePool: 5000,  entryFee: 35 },
-  { name: 'Mountain Melee',        tier: 'regional', week: 27, location: loc(V.denver),       entrants: 128, prizePool: 2400,  entryFee: 25 },
-  { name: 'Desert Heat',           tier: 'regional', week: 31, location: loc(V.phoenix),      entrants: 192, prizePool: 3200,  entryFee: 30 },
-  { name: 'Rose City Ruckus',      tier: 'regional', week: 32, location: loc(V.portland),     entrants: 128, prizePool: 2200,  entryFee: 25 },
-  { name: 'Capital Clash',         tier: 'regional', week: 36, location: loc(V.richmond),     entrants: 160, prizePool: 3000,  entryFee: 30 },
-  { name: 'Great Lakes Open',      tier: 'regional', week: 40, location: loc(V.detroit),      entrants: 192, prizePool: 3500,  entryFee: 30 },
-  { name: 'Autumn Assault',        tier: 'regional', week: 44, location: loc(V.chicago),      entrants: 224, prizePool: 4000,  entryFee: 30 },
-  { name: 'Gulf Coast Gauntlet',   tier: 'regional', week: 46, location: loc(V.houston),      entrants: 128, prizePool: 2400,  entryFee: 25 },
-  { name: 'Northeast Championship',tier: 'regional', week: 49, location: loc(V.newYork),      entrants: 256, prizePool: 5000,  entryFee: 35 },
-  { name: 'Winter Wavedash',       tier: 'regional', week: 52, location: loc(V.seattle),      entrants: 160, prizePool: 2800,  entryFee: 25 },
+  ev('Pacific Rising',         'regional', 2,  V.losAngeles,   192, 3200, 30),
+  ev('Emerald City Classic',   'regional', 6,  V.seattle,      160, 2800, 25),
+  ev('Triforce Tournament',    'regional', 10, V.newYork,      224, 4000, 30),
+  ev('Heartland Havoc',        'regional', 14, V.chicago,      192, 3500, 30),
+  ev('Lone Star Throwdown',    'regional', 18, V.austin,       160, 2800, 25),
+  ev('Liberty Bell Brawl',     'regional', 19, V.philadelphia, 128, 2400, 25),
+  ev('Summer Stockade',        'regional', 23, V.orlando,      256, 5000, 35),
+  ev('Mountain Melee',         'regional', 27, V.denver,       128, 2400, 25),
+  ev('Desert Heat',            'regional', 31, V.phoenix,      192, 3200, 30),
+  ev('Rose City Ruckus',       'regional', 32, V.portland,     128, 2200, 25),
+  ev('Capital Clash',          'regional', 36, V.richmond,     160, 3000, 30),
+  ev('Great Lakes Open',       'regional', 40, V.detroit,      192, 3500, 30),
+  ev('Autumn Assault',         'regional', 44, V.chicago,      224, 4000, 30),
+  ev('Gulf Coast Gauntlet',    'regional', 46, V.houston,      128, 2400, 25),
+  ev('Northeast Championship', 'regional', 49, V.newYork,      256, 5000, 35),
+  ev('Winter Wavedash',        'regional', 52, V.seattle,      160, 2800, 25),
 ]
 
 // ── Local series ─────────────────────────────────────────────────────────────
@@ -87,7 +112,7 @@ const REGIONALS: EventDef[] = [
 
 interface LocalSeries {
   name: string
-  location: string
+  venue: Venue
   baseEntrants: number
   entryFee: number
   weeks: number[]
@@ -96,21 +121,21 @@ interface LocalSeries {
 const LOCAL_SERIES: LocalSeries[] = [
   {
     name: 'Westside Wednesday',
-    location: loc(V.losAngeles),
+    venue: V.losAngeles,
     baseEntrants: 40,
     entryFee: 5,
     weeks: [1, 5, 9, 13, 17, 22, 26, 30, 35, 39, 43, 48, 51],
   },
   {
     name: 'Tristate Throwdown',
-    location: loc(V.newYork),
+    venue: V.newYork,
     baseEntrants: 48,
     entryFee: 5,
     weeks: [3, 7, 11, 15, 20, 24, 28, 33, 37, 41, 45, 48],
   },
   {
     name: 'Crossroads Clash',
-    location: loc(V.chicago),
+    venue: V.chicago,
     baseEntrants: 36,
     entryFee: 5,
     weeks: [2, 6, 10, 14, 19, 23, 27, 32, 36, 40, 44, 49],
@@ -129,6 +154,7 @@ function buildCalendar(): Tournament[] {
       id: `t${nextId++}`,
       name: def.name,
       tier: def.tier,
+      region: def.region,
       week: def.week,
       location: def.location,
       entrants: def.entrants,
@@ -149,8 +175,9 @@ function buildCalendar(): Tournament[] {
         id: `t${nextId++}`,
         name: `${series.name} #${edition++}`,
         tier: 'local' as const,
+        region: series.venue.region,
         week,
-        location: series.location,
+        location: loc(series.venue),
         entrants,
         prizePool: entrants * series.entryFee,
         entryFee: series.entryFee,

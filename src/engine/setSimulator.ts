@@ -237,6 +237,7 @@ export interface SimSetParams {
   opponentAdaptability: number
   opponentCharacter:    Character
   opponentTag:          string
+  opponentSeed:         number
   isBo5:                boolean
   round:                string
 }
@@ -252,7 +253,7 @@ export function simulateSet(params: SimSetParams): SetResult {
   const {
     playerEPR, playerStats, playerCharacter,
     opponentEPR, opponentAdaptability, opponentCharacter,
-    opponentTag, isBo5, round,
+    opponentTag, opponentSeed, isBo5, round,
   } = params
 
   const targetScore = isBo5 ? 3 : 2
@@ -290,6 +291,7 @@ export function simulateSet(params: SimSetParams): SetResult {
     narrative,
     opponentTag,
     opponentCharacter,
+    opponentSeed,
     isBo5,
     round,
   }

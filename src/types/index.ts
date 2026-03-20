@@ -46,6 +46,7 @@ export interface Tournament {
   name: string
   tier: TournamentTier
   week: number         // which game week it occurs
+  location: string     // "City, ST" format (e.g. "Oakland, CA")
   entrants: number     // estimated field size
   prizePool: number    // total prize pool in dollars
   entryFee: number     // per player
@@ -70,6 +71,7 @@ export interface SetResult {
   narrative: SetNarrative
   opponentTag: string
   opponentCharacter: Character
+  opponentSeed: number   // bracket seed of the opponent (1 = strongest)
   isBo5: boolean
   round: string
 }

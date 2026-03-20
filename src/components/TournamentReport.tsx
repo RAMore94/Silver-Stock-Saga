@@ -55,6 +55,7 @@ function SetRow({ set }: { set: SetResult }) {
 
       {/* Opponent */}
       <div className="flex-1 flex items-center gap-2">
+        <span className="text-xs text-[#8a6a55] font-mono">#{set.opponentSeed}</span>
         <span className="text-sm font-medium text-[#3d2b1f]">{set.opponentTag}</span>
         <span className="text-xs text-[#8a6a55]">({set.opponentCharacter})</span>
         {set.isBo5 && (
